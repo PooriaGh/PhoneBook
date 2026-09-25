@@ -6,6 +6,7 @@ using PhoneBook.Api;
 using PhoneBook.Api.Endpoints;
 using PhoneBook.Api.Infrastructure;
 using PhoneBook.Api.Infrastructure.Auth;
+using PhoneBook.Api.Infrastructure.RateLimiting;
 using PhoneBook.Api.Infrastructure.Swagger;
 using PhoneBook.Application;
 using PhoneBook.Infrastructure;
@@ -31,6 +32,7 @@ builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = 
         StatusCodes.Status403Forbidden => "Auth.Forbidden",
         StatusCodes.Status404NotFound => "General.NotFound",
         StatusCodes.Status405MethodNotAllowed => "General.MethodNotAllowed",
+        StatusCodes.Status429TooManyRequests => "RateLimit.Exceeded",
         _ => "General.Error",
     });
 });
@@ -39,6 +41,7 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddPhoneBookAuth(builder.Configuration);
+builder.Services.AddPhoneBookRateLimiting();
 
 builder.Services
     .AddApiVersioning(options =>
@@ -62,15 +65,21 @@ app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseSerilogRequestLogging();
 
+// Rate limiting sits between authentication (so the sub claim picks the partition) and authorization (so an
+// over-limit caller gets 429 even when it would otherwise get 401/403). Feature 002, research R-03.
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 
 var versionSet = app.NewApiVersionSet().HasApiVersion(new ApiVersion(1)).ReportApiVersions().Build();
-var api = app.MapGroup("api/v{version:apiVersion}").WithApiVersionSet(versionSet);
+var api = app.MapGroup("api/v{version:apiVersion}")
+    .WithApiVersionSet(versionSet)
+    .RequireRateLimiting(RateLimitOptions.ApiPolicy);
 app.MapEndpoints(api);
 
-app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
-app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
+app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).DisableRateLimiting();
+app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") })
+    .DisableRateLimiting();
 
 if (app.Environment.IsDevelopment())
 {

@@ -7,6 +7,7 @@ using OpenIddict.Server;
 using PhoneBook.Identity;
 using PhoneBook.Identity.Data;
 using PhoneBook.Identity.Endpoints;
+using PhoneBook.Identity.RateLimiting;
 using PhoneBook.Identity.Seeding;
 using PhoneBook.Identity.Telemetry;
 using Serilog;
@@ -72,6 +73,7 @@ builder.Services.AddOptions<CorsOptions>()
 
 builder.Services.AddAuthorization();
 builder.Services.AddSingleton<IdentityMetrics>();
+builder.Services.AddIdentityRateLimiting();
 builder.Services.AddHostedService<IdentitySeeder>();
 builder.Services.AddHealthChecks().AddDbContextCheck<IdentityDbContext>("database", tags: ["ready"]);
 
@@ -79,14 +81,19 @@ var app = builder.Build();
 
 app.UseSerilogRequestLogging();
 
-// CORS before authentication, so preflight requests are answered before OpenIddict sees them.
+// Routing first so endpoint metadata (rate-limit policies) is known; CORS before the limiter so preflights are
+// answered at once; the limiter before authentication, because OpenIddict answers token requests (including
+// invalid_client) inside the authentication middleware (feature 002, research R-03).
+app.UseRouting();
 app.UseCors(IdentitySettings.CorsPolicy);
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapTokenEndpoint();
-app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
-app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
+app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).DisableRateLimiting();
+app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") })
+    .DisableRateLimiting();
 
 await app.RunAsync().ConfigureAwait(false);
 

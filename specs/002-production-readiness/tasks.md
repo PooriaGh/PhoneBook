@@ -237,12 +237,13 @@ Rejected requests get `429` with `Retry-After`. Health checks are never limited 
 
 ### Tests for User Story 2 ⚠️ (write first; they must fail)
 
-- [ ] T027 [US2] Extend `tests/PhoneBook.Api.IntegrationTests/Infrastructure/TestAuthHandler.cs` with an optional `X-Test-Sub` header (constant `SubHeader`, default `test-client`), which becomes the `sub` claim so tests can act as different callers. Add `WithSub(this HttpClient, string sub)` to `.../TestAuthExtensions.cs`. Existing tests stay unchanged.
-- [ ] T028 [P] [US2] Create `tests/PhoneBook.Api.IntegrationTests/Infrastructure/RateLimitedApiFactory.cs` (research R-07):
+- [X] T027 [US2] Extend `tests/PhoneBook.Api.IntegrationTests/Infrastructure/TestAuthHandler.cs` with an optional `X-Test-Sub` header (constant `SubHeader`, default `test-client`), which becomes the `sub` claim so tests can act as different callers. Add `WithSub(this HttpClient, string sub)` to `.../TestAuthExtensions.cs`. Existing tests stay unchanged.
+- [X] T028 [P] [US2] Create `tests/PhoneBook.Api.IntegrationTests/Infrastructure/RateLimitedApiFactory.cs` (research R-07):
   - An SQLite factory with its own in-memory database name, `RateLimiting:Api:PermitLimit=5`, `RateLimiting:Api:WindowSeconds=2` and test authentication.
   - It implements `IPhoneBookApiFactory`, including the `Capture` from T038.
   - It is **not** a fixture. Each test class creates it in its constructor and disposes it in `DisposeAsync`, so every test starts with fresh counters (analyze T1).
-- [ ] T029 [P] [US2] Create `tests/PhoneBook.Api.IntegrationTests/RateLimiting/ApiRateLimitTests.cs`, using a fresh `RateLimitedApiFactory` per test and a distinct `sub` per test (`$"{testName}-{Guid.NewGuid():N}"`):
+  - *Implementation note:* the window defaults to 60 s through a constructor parameter, because a fixed window resets on its own timer and a 2 s window could reset mid-burst and make tests flaky. Only the Retry-After test uses `new RateLimitedApiFactory(windowSeconds: 2)`.
+- [X] T029 [P] [US2] Create `tests/PhoneBook.Api.IntegrationTests/RateLimiting/ApiRateLimitTests.cs`, using a fresh `RateLimitedApiFactory` per test and a distinct `sub` per test (`$"{testName}-{Guid.NewGuid():N}"`):
   - **AC1**: 5 × `GET /api/v1/contacts?tag=x` → `200`. The 6th → `429`, `Content-Type: application/problem+json`, `status` 429, `errorCode` `RateLimit.Exceeded`, a non-empty `traceId`, and an integer `Retry-After` header ≥ 1.
   - **AC2 / SC-003**: sub A sends 50 requests, 10 times its allowance, and all 45 excess requests get `429`. Interleaved, sub B sends 5 requests, and all get `200` (0% rejected).
   - **AC3**: after a `429`, wait for `Retry-After` plus 200 ms, and the next request gets `200`.
@@ -251,18 +252,18 @@ Rejected requests get `429` with `Retry-After`. Health checks are never limited 
   - **Only `Retry-After`** (FR-009): no response header starts with `RateLimit`.
   - **AC5 / FR-010**: 50 × `GET /health/ready`, `/health/live` and `/swagger/v1/swagger.json` → never `429`.
   - **Write routes are limited too**: `POST` counts against the same allowance.
-- [ ] T030 [P] [US2] Create `tests/PhoneBook.Identity.IntegrationTests/Infrastructure/RateLimitedIdentityFactory.cs` (`: IdentityFactory`, `protected override int TokenPermitLimit => 3`; relies on T010 unsealing the base) and `tests/PhoneBook.Identity.IntegrationTests/TokenRateLimitTests.cs`. Each test creates its own `RateLimitedIdentityFactory` in the constructor and disposes it in `DisposeAsync`: every in-process request shares the partition `ip:unknown`, so a shared host would leak counts (research R-07).
+- [X] T030 [P] [US2] Create `tests/PhoneBook.Identity.IntegrationTests/Infrastructure/RateLimitedIdentityFactory.cs` (`: IdentityFactory`, `protected override int TokenPermitLimit => 3`; relies on T010 unsealing the base) and `tests/PhoneBook.Identity.IntegrationTests/TokenRateLimitTests.cs`. Each test creates its own `RateLimitedIdentityFactory` in the constructor and disposes it in `DisposeAsync`: every in-process request shares the partition `ip:unknown`, so a shared host would leak counts (research R-07).
   - **AC4**: 3 valid client-credentials requests → `200`. The 4th → `429`, with the header `Retry-After` and the JSON body `{"error":"temporarily_unavailable","error_description":"Too many requests. Retry later."}`.
   - **Brute-force protection** (constitution v1.0.2, VI): requests with a **wrong client secret** also count. After 3 × `invalid_client`, the 4th gets `429`. This proves the limiter runs before OpenIddict handles the request (T035).
   - **FR-010**: `/health/ready`, `/.well-known/openid-configuration` and the JWKS URI (taken from discovery) are never limited, 20 calls each.
 
 ### Implementation for User Story 2
 
-- [ ] T031 [P] [US2] Create `src/PhoneBook.Api/Infrastructure/RateLimiting/RateLimitOptions.cs` for section `RateLimiting`:
+- [X] T031 [P] [US2] Create `src/PhoneBook.Api/Infrastructure/RateLimiting/RateLimitOptions.cs` for section `RateLimiting`:
   - a nested `FixedWindowPolicyOptions Api` with `PermitLimit = 100` and `WindowSeconds = 60`, both `[Range(1, int.MaxValue)]`
   - bound with `AddOptions<RateLimitOptions>().BindConfiguration("RateLimiting").ValidateDataAnnotations().ValidateOnStart()`
   - include the policy name constant `ApiPolicy = "api"`
-- [ ] T032 [US2] Create `src/PhoneBook.Api/Infrastructure/RateLimiting/RateLimitingSetup.cs` with `AddPhoneBookRateLimiting(this IServiceCollection)`:
+- [X] T032 [US2] Create `src/PhoneBook.Api/Infrastructure/RateLimiting/RateLimitingSetup.cs` with `AddPhoneBookRateLimiting(this IServiceCollection)`:
   - **Policy `api`** via `AddPolicy(ApiPolicy, httpContext => RateLimitPartition.GetFixedWindowLimiter(key, …))`:
     - the partition key is `"sub:" + sub` for an authenticated user, otherwise `"ip:" + RemoteIpAddress`, or `"ip:unknown"` when there is none
     - the options come from `IOptionsMonitor<RateLimitOptions>` resolved from `httpContext.RequestServices` **at request time**: `PermitLimit`, `Window = TimeSpan.FromSeconds(WindowSeconds)`, `QueueLimit = 0`, `AutoReplenishment = true`
@@ -272,15 +273,15 @@ Rejected requests get `429` with `Retry-After`. Health checks are never limited 
     - increment `PhoneBookMetrics.RateLimitRejections` (resolved from `RequestServices`) with the tag `policy=api`
     - write ProblemDetails through `IProblemDetailsService` with status 429, title "Too many requests" and type `https://tools.ietf.org/html/rfc6585#section-4`. Do **not** set `errorCode` here: T033's status switch adds `RateLimit.Exceeded` and `traceId` in one place (analyze D1).
     - no try/catch
-- [ ] T033 [US2] Update `src/PhoneBook.Api/Program.cs`:
+- [X] T033 [US2] Update `src/PhoneBook.Api/Program.cs`:
   - call `builder.Services.AddPhoneBookRateLimiting()`
   - add `StatusCodes.Status429TooManyRequests => "RateLimit.Exceeded"` to the `errorCode` switch in `CustomizeProblemDetails`
   - order the middleware as `app.UseAuthentication(); app.UseRateLimiter(); app.UseAuthorization();`, so `sub` is known when the partition is chosen
   - call `.RequireRateLimiting(RateLimitOptions.ApiPolicy)` on the `api` route group
   - call `.DisableRateLimiting()` on both `MapHealthChecks` calls
   - add a comment that references research R-03
-- [ ] T034 [P] [US2] Add `"RateLimiting": { "Api": { "PermitLimit": 100, "WindowSeconds": 60 } }` to `src/PhoneBook.Api/appsettings.json`.
-- [ ] T035 [US2] Create `src/PhoneBook.Identity/RateLimiting/TokenRateLimitOptions.cs` (section `RateLimiting:Token`, `PermitLimit = 10`, `WindowSeconds = 60`, `[Range(1, int.MaxValue)]`, `ValidateOnStart`, constant `TokenPolicy = "token"`) and `src/PhoneBook.Identity/RateLimiting/RateLimitingSetup.cs`:
+- [X] T034 [P] [US2] Add `"RateLimiting": { "Api": { "PermitLimit": 100, "WindowSeconds": 60 } }` to `src/PhoneBook.Api/appsettings.json`.
+- [X] T035 [US2] Create `src/PhoneBook.Identity/RateLimiting/TokenRateLimitOptions.cs` (section `RateLimiting:Token`, `PermitLimit = 10`, `WindowSeconds = 60`, `[Range(1, int.MaxValue)]`, `ValidateOnStart`, constant `TokenPolicy = "token"`) and `src/PhoneBook.Identity/RateLimiting/RateLimitingSetup.cs`:
   - **Policy `token`**: partitioned by `"ip:" + RemoteIpAddress`, fixed window, `QueueLimit = 0`, with options read from `IOptionsMonitor` at request time.
   - **`OnRejected`**:
     - `429`
@@ -295,8 +296,8 @@ Rejected requests get `429` with `Retry-After`. Health checks are never limited 
   - **Endpoints**:
     - `.RequireRateLimiting(TokenPolicy)` on the endpoint returned by `MapTokenEndpoint` (change `src/PhoneBook.Identity/Endpoints/TokenEndpoint.cs` to return the `RouteHandlerBuilder`)
     - `.DisableRateLimiting()` on the health checks
-- [ ] T036 [P] [US2] Add `"RateLimiting": { "Token": { "PermitLimit": 10, "WindowSeconds": 60 } }` to `src/PhoneBook.Identity/appsettings.json`.
-- [ ] T037 [US2] Checkpoint. All US2 tests pass, the feature-001 load and concurrency tests stay green (thanks to T010), and the build has 0 warnings.
+- [X] T036 [P] [US2] Add `"RateLimiting": { "Token": { "PermitLimit": 10, "WindowSeconds": 60 } }` to `src/PhoneBook.Identity/appsettings.json`.
+- [X] T037 [US2] Checkpoint. All US2 tests pass, the feature-001 load and concurrency tests stay green (thanks to T010), and the build has 0 warnings.
 
 **Checkpoint**: US1 and US2 both work on their own.
 

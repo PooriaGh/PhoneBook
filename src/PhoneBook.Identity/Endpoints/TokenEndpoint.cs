@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
 using OpenIddict.Server.AspNetCore;
+using PhoneBook.Identity.RateLimiting;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace PhoneBook.Identity.Endpoints;
@@ -16,7 +17,9 @@ internal static class TokenEndpoint
 {
     public static IEndpointRouteBuilder MapTokenEndpoint(this IEndpointRouteBuilder app)
     {
-        app.MapPost("connect/token", HandleAsync).ExcludeFromDescription();
+        app.MapPost("connect/token", HandleAsync)
+            .RequireRateLimiting(TokenRateLimitOptions.TokenPolicy)
+            .ExcludeFromDescription();
         return app;
     }
 

@@ -18,6 +18,12 @@ internal static class TestAuthExtensions
         return services;
     }
 
+    public static HttpClient WithSub(this HttpClient client, string sub)
+    {
+        client.DefaultRequestHeaders.Add(TestAuthHandler.SubHeader, sub);
+        return client;
+    }
+
     public static HttpClient WithScopes(this HttpClient client, string? scopes)
     {
         if (scopes is not null)

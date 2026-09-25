@@ -9,6 +9,7 @@ namespace PhoneBook.Api.IntegrationTests.Infrastructure;
 /// <summary>
 /// Replaces OpenIddict validation in API tests. The <c>X-Test-Scopes</c> header controls the caller:
 /// missing → both scopes; <c>none</c> → unauthenticated (401); otherwise → that value as the <c>scope</c> claim.
+/// The optional <c>X-Test-Sub</c> header sets the <c>sub</c> claim, so rate-limit tests can act as different callers.
 /// The real token round-trip is covered by the Identity end-to-end test.
 /// </summary>
 public sealed class TestAuthHandler(
@@ -17,6 +18,8 @@ public sealed class TestAuthHandler(
 {
     public const string SchemeName = "Test";
     public const string ScopesHeader = "X-Test-Scopes";
+    public const string SubHeader = "X-Test-Sub";
+    public const string DefaultSub = "test-client";
     public const string NoScopes = "none";
     public const string AllScopes = "phonebook.read phonebook.write";
 
@@ -28,8 +31,8 @@ public sealed class TestAuthHandler(
             return Task.FromResult(AuthenticateResult.NoResult());
         }
 
-        var identity = new ClaimsIdentity(
-            [new Claim("sub", "test-client"), new Claim("scope", scopes)], SchemeName);
+        var sub = Request.Headers.TryGetValue(SubHeader, out var subValue) ? subValue.ToString() : DefaultSub;
+        var identity = new ClaimsIdentity([new Claim("sub", sub), new Claim("scope", scopes)], SchemeName);
         var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName);
         return Task.FromResult(AuthenticateResult.Success(ticket));
     }
