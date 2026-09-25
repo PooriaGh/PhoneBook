@@ -2,6 +2,7 @@ using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using PhoneBook.Application.Abstractions.Behaviors;
 using PhoneBook.Application.Abstractions.Events;
+using PhoneBook.Application.Abstractions.Telemetry;
 using PhoneBook.Domain.Contacts.Services;
 
 namespace PhoneBook.Application;
@@ -26,6 +27,7 @@ public static class DependencyInjection
         services.AddValidatorsFromAssembly(assembly, includeInternalTypes: true);
         services.AddScoped<ContactDuplicateChecker>();
         services.AddScoped<IDomainEventDispatcher, DomainEventDispatcher>();
+        services.AddSingleton<PhoneBookMetrics>();
 
         return services;
     }

@@ -14,5 +14,6 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <!-- Dapper for hand-written read-side SQL (CQRS). Provider drivers stay in Infrastructure. -->
     <PackageReference Include="Dapper" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.Abstractions" />
   </ItemGroup>
 </Project>

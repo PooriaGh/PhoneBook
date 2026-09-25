@@ -35,6 +35,7 @@ public sealed class EndToEndTokenToApiTests(IdentityFactory identity) : IAsyncLi
             builder.UseSetting("Database:Provider", "Sqlite");
             builder.UseSetting("Database:ConnectionString", $"Data Source=e2e-{Guid.NewGuid():N};Mode=Memory;Cache=Shared");
             builder.UseSetting("Auth:Authority", IdentityFactory.Issuer);
+            builder.UseSetting("RateLimiting:Api:PermitLimit", "1000000");
             builder.ConfigureTestServices(services =>
                 services.Configure<OpenIddictValidationOptions>(options => options.Configuration = configuration));
         });

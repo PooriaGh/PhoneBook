@@ -94,7 +94,7 @@ shipped on its own.
 
 **Purpose**: Add the new packages (research R-06) and confirm the baseline.
 
-- [ ] T001 Add these `PackageVersion` entries to `Directory.Packages.props`, in new `ItemGroup`s labelled "Telemetry" and "Identity users", each with a licence comment:
+- [X] T001 Add these `PackageVersion` entries to `Directory.Packages.props`, in new `ItemGroup`s labelled "Telemetry" and "Identity users", each with a licence comment:
   - `OpenTelemetry.Extensions.Hosting` 1.19.1
   - `OpenTelemetry.Instrumentation.AspNetCore` 1.19.0
   - `OpenTelemetry.Instrumentation.Http` 1.19.0
@@ -103,12 +103,12 @@ shipped on its own.
   - `Npgsql.OpenTelemetry` 10.0.3
   - `Microsoft.Extensions.Diagnostics.Abstractions` 10.0.12 (`IMeterFactory` for the Application layer; MIT)
   - `Microsoft.Extensions.Diagnostics.Testing` 10.10.0 (`MetricCollector<T>`, tests only; MIT; research R-06)
-  - `Microsoft.Extensions.Identity.Core` 10.0.12, with the comment "PasswordHasher only; no ASP.NET Core Identity stores (research R-05)"
-- [ ] T002 [P] Add `PackageReference`s to `src/PhoneBook.Api/PhoneBook.Api.csproj`: the four OpenTelemetry host packages (Extensions.Hosting, Instrumentation.AspNetCore, Instrumentation.Http, Exporter.OpenTelemetryProtocol) and `Npgsql.OpenTelemetry`.
-- [ ] T003 [P] Add `PackageReference`s to `src/PhoneBook.Identity/PhoneBook.Identity.csproj`: the four OpenTelemetry host packages and `Microsoft.Extensions.Identity.Core`.
-- [ ] T004 [P] Add a `PackageReference` to `Microsoft.Extensions.Diagnostics.Abstractions` in `src/PhoneBook.Application/PhoneBook.Application.csproj`, for `IMeterFactory`. It is BCL-level, not a provider driver, so the architecture tests allow it.
-- [ ] T005 [P] Add `PackageReference`s to `OpenTelemetry.Exporter.InMemory` and `Microsoft.Extensions.Diagnostics.Testing` in `tests/PhoneBook.Api.IntegrationTests/PhoneBook.Api.IntegrationTests.csproj` and in `tests/PhoneBook.Identity.IntegrationTests/PhoneBook.Identity.IntegrationTests.csproj`.
-- [ ] T006 Run the checkpoint commands to confirm the baseline: 0 warnings, and 132 of 132 tests passing with no code changes yet.
+  - ~~`Microsoft.Extensions.Identity.Core` 10.0.12~~ *(implementation note: not needed. It is part of the ASP.NET Core shared framework, and an explicit reference fails the build with NU1510. `PasswordHasher` is used from the framework.)*
+- [X] T002 [P] Add `PackageReference`s to `src/PhoneBook.Api/PhoneBook.Api.csproj`: the four OpenTelemetry host packages (Extensions.Hosting, Instrumentation.AspNetCore, Instrumentation.Http, Exporter.OpenTelemetryProtocol) and `Npgsql.OpenTelemetry`.
+- [X] T003 [P] Add `PackageReference`s to `src/PhoneBook.Identity/PhoneBook.Identity.csproj`: the four OpenTelemetry host packages. `Microsoft.Extensions.Identity.Core` comes from the shared framework; see the T001 note.
+- [X] T004 [P] Add a `PackageReference` to `Microsoft.Extensions.Diagnostics.Abstractions` in `src/PhoneBook.Application/PhoneBook.Application.csproj`, for `IMeterFactory`. It is BCL-level, not a provider driver, so the architecture tests allow it.
+- [X] T005 [P] Add `PackageReference`s to `OpenTelemetry.Exporter.InMemory` and `Microsoft.Extensions.Diagnostics.Testing` in `tests/PhoneBook.Api.IntegrationTests/PhoneBook.Api.IntegrationTests.csproj` and in `tests/PhoneBook.Identity.IntegrationTests/PhoneBook.Identity.IntegrationTests.csproj`.
+- [X] T006 Run the checkpoint commands to confirm the baseline: 0 warnings, and 132 of 132 tests passing with no code changes yet.
 
 ---
 
@@ -119,25 +119,25 @@ cannot hit the new rate limits, and the shared telemetry names.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T007 In `tests/PhoneBook.Api.IntegrationTests/Infrastructure/PostgresContainerFixture.cs`, add `.WithEnvironment("POSTGRES_INITDB_ARGS", "--locale=C --encoding=UTF8")` to the `PostgreSqlBuilder`, so the test database compares text by bytes (research R-02). Explain why in an XML comment.
-- [ ] T008 Create `tests/PhoneBook.Api.IntegrationTests/Providers/PostgresCollationTests.cs` in the `Postgres` collection. It asserts that `SELECT datcollate FROM pg_database WHERE datname = current_database()` returns `C`. Do not use `SHOW lc_collate`, which PostgreSQL 16+ removed. This guards the deployment requirement. Run it after T007, since it only passes once the container is created with the C locale (F1).
-- [ ] T009 [P] In `docker-compose.yml`, add `POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"` to the `postgres` service environment, with a comment "deployment requirement: byte-order collation for paging (feature 002, research R-02)".
-- [ ] T010 [P] Make the shared test hosts effectively unlimited, so feature-001 load tests (for example 100 mixed requests) never hit the new limits (research R-03, R-07):
+- [X] T007 In `tests/PhoneBook.Api.IntegrationTests/Infrastructure/PostgresContainerFixture.cs`, add `.WithEnvironment("POSTGRES_INITDB_ARGS", "--locale=C --encoding=UTF8")` to the `PostgreSqlBuilder`, so the test database compares text by bytes (research R-02). Explain why in an XML comment.
+- [X] T008 Create `tests/PhoneBook.Api.IntegrationTests/Providers/PostgresCollationTests.cs` in the `Postgres` collection. It asserts that `SELECT datcollate FROM pg_database WHERE datname = current_database()` returns `C`. Do not use `SHOW lc_collate`, which PostgreSQL 16+ removed. This guards the deployment requirement. Run it after T007, since it only passes once the container is created with the C locale (F1).
+- [X] T009 [P] In `docker-compose.yml`, add `POSTGRES_INITDB_ARGS: "--locale=C --encoding=UTF8"` to the `postgres` service environment, with a comment "deployment requirement: byte-order collation for paging (feature 002, research R-02)".
+- [X] T010 [P] Make the shared test hosts effectively unlimited, so feature-001 load tests (for example 100 mixed requests) never hit the new limits (research R-03, R-07):
   - in `tests/PhoneBook.Api.IntegrationTests/Infrastructure/PhoneBookApiFactory.cs` and `.../SqliteApiFactory.cs`, add `builder.UseSetting("RateLimiting:Api:PermitLimit", "1000000")`
   - in `tests/PhoneBook.Identity.IntegrationTests/Infrastructure/IdentityFactory.cs`:
     - **unseal** the class (`public class IdentityFactory`)
     - add `protected virtual int TokenPermitLimit => 1_000_000;`
     - in `ConfigureWebHost`, call `builder.UseSetting("RateLimiting:Token:PermitLimit", TokenPermitLimit.ToString(CultureInfo.InvariantCulture))`
   - do the same (`RateLimiting:Api:PermitLimit`) for the API factory built inside `tests/PhoneBook.Identity.IntegrationTests/EndToEndTokenToApiTests.cs`
-- [ ] T011 [P] Create two files in `src/PhoneBook.Application/Abstractions/Telemetry/`, using only BCL `System.Diagnostics` and `System.Diagnostics.Metrics` plus `IMeterFactory` (data-model §3):
+- [X] T011 [P] Create two files in `src/PhoneBook.Application/Abstractions/Telemetry/`, using only BCL `System.Diagnostics` and `System.Diagnostics.Metrics` plus `IMeterFactory` (data-model §3):
   - **`PhoneBookTelemetry.cs`**: a public static class with:
     - `ActivitySource Application` named `PhoneBook.Application`, and `ActivitySource Persistence` named `PhoneBook.Persistence`. These are static, because spans are filtered by trace id.
     - `const string` names for the tags `phonebook.request`, `phonebook.result`, `db.system`, `db.operation` and `policy`, and for the meter name `PhoneBook`.
   - **`PhoneBookMetrics.cs`**: a public sealed class whose constructor takes `IMeterFactory` and calls `meterFactory.Create("PhoneBook")`. It exposes `Counter<long>` members `ContactsCreated` (`phonebook.contacts.created`), `ContactsUpdated` (`phonebook.contacts.updated`), `ContactsDeleted` (`phonebook.contacts.deleted`) and `RateLimitRejections` (`phonebook.ratelimit.rejections`).
 
   Register `PhoneBookMetrics` as a singleton in `src/PhoneBook.Application/DependencyInjection.cs`. Because the meter comes from the host's `IMeterFactory`, each test host's metrics can be measured on their own (M1, research R-07); a static `Meter` would mix counts from parallel test hosts.
-- [ ] T012 [P] Create `src/PhoneBook.Identity/Telemetry/IdentityMetrics.cs`: a sealed class with an `IMeterFactory` constructor that creates meter `PhoneBook` and `Counter<long> RateLimitRejections` (`phonebook.ratelimit.rejections`, tag `policy`). Register it as a singleton in `src/PhoneBook.Identity/Program.cs`. The Identity host does not reference Application, so it has its own class with the same meter name.
-- [ ] T013 Checkpoint. The build has 0 warnings, and all feature-001 tests plus T008 pass.
+- [X] T012 [P] Create `src/PhoneBook.Identity/Telemetry/IdentityMetrics.cs`: a sealed class with an `IMeterFactory` constructor that creates meter `PhoneBook` and `Counter<long> RateLimitRejections` (`phonebook.ratelimit.rejections`, tag `policy`). Register it as a singleton in `src/PhoneBook.Identity/Program.cs`. The Identity host does not reference Application, so it has its own class with the same meter name.
+- [X] T013 Checkpoint. The build has 0 warnings, and all feature-001 tests plus T008 pass.
 
 **Checkpoint**: The foundation is ready. User stories can now start, in parallel if staffed.
 

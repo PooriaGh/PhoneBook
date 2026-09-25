@@ -43,6 +43,9 @@ public sealed class PhoneBookApiFactory(PostgresContainerFixture postgres)
     {
         builder.UseSetting("Database:Provider", "Postgres");
         builder.UseSetting("Database:ConnectionString", postgres.ConnectionString);
+
+        // Effectively unlimited, so load tests never hit the rate limiter (feature 002, research R-03).
+        builder.UseSetting("RateLimiting:Api:PermitLimit", "1000000");
         builder.ConfigureTestServices(services => services.AddTestAuthentication());
     }
 

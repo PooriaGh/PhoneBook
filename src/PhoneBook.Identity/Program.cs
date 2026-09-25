@@ -8,6 +8,7 @@ using PhoneBook.Identity;
 using PhoneBook.Identity.Data;
 using PhoneBook.Identity.Endpoints;
 using PhoneBook.Identity.Seeding;
+using PhoneBook.Identity.Telemetry;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -70,6 +71,7 @@ builder.Services.AddOptions<CorsOptions>()
             .WithMethods(HttpMethods.Post, HttpMethods.Options)));
 
 builder.Services.AddAuthorization();
+builder.Services.AddSingleton<IdentityMetrics>();
 builder.Services.AddHostedService<IdentitySeeder>();
 builder.Services.AddHealthChecks().AddDbContextCheck<IdentityDbContext>("database", tags: ["ready"]);
 

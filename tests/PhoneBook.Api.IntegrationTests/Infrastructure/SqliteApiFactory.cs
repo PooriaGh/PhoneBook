@@ -29,6 +29,9 @@ public sealed class SqliteApiFactory : WebApplicationFactory<ApiAssemblyMarker>,
     {
         builder.UseSetting("Database:Provider", "Sqlite");
         builder.UseSetting("Database:ConnectionString", _connectionString);
+
+        // Effectively unlimited, so load tests never hit the rate limiter (feature 002, research R-03).
+        builder.UseSetting("RateLimiting:Api:PermitLimit", "1000000");
         builder.ConfigureTestServices(services => services.AddTestAuthentication());
     }
 }
