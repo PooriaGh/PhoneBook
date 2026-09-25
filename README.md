@@ -1,5 +1,9 @@
 # PhoneBook: Backend Assignment (.NET 10)
 
+[![CI](https://github.com/PooriaGh/PhoneBook/actions/workflows/ci.yml/badge.svg)](https://github.com/PooriaGh/PhoneBook/actions/workflows/ci.yml)
+![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
+![Tests](https://img.shields.io/badge/tests-132%20passing-brightgreen)
+
 > **Cover letter** for the backend developer assignment of **Hasin Group (گروه حصین)**.
 > This README explains the architecture, the technology choices, how to run and test the solution, and the
 > development process (spec-driven development with AI assistance).
@@ -264,12 +268,23 @@ a vault, persist the OpenIddict store, and add authorization code + PKCE if end 
   row count, every updated row at `version == 2`, and no duplicates.
 * **End-to-end design note:** the end-to-end test gives the API the Identity host's real issuer and signing
   keys (read from its discovery and JWKS documents) instead of swapping HTTP handlers. Token validation is
-  genuine, and the test needs no network. The HTTP discovery path itself is exercised by the compose setup.
+  genuine, and the test needs no network. The live HTTP discovery path (the API fetching the Identity host's
+  discovery document and JWKS over HTTPS) was exercised by the quickstart run in §11 (17/17).
 
 ```bash
-dotnet test --solution PhoneBook.slnx          # everything (Docker must be running)
-dotnet test --project tests/PhoneBook.Domain.UnitTests
+dotnet test --solution PhoneBook.slnx                                  # everything (Docker must be running)
+dotnet test --project tests/PhoneBook.Domain.UnitTests                 # one project
+dotnet test --solution PhoneBook.slnx -c Release --report-trx --coverage   # what CI runs
 ```
+
+The .NET 10 SDK runs tests on **Microsoft.Testing.Platform** (`global.json` → `"test": { "runner": … }`), so
+filters use `--filter-class` / `--filter-method` / `--filter-query` instead of VSTest's `--filter`. TRX and
+coverage reports come from the `Microsoft.Testing.Extensions.TrxReport` and `…CodeCoverage` packages and are
+written to `./TestResults`.
+
+**Continuous integration:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) restores, builds in Release
+with warnings as errors, and runs the whole suite on `ubuntu-latest`. Testcontainers uses the runner's Docker
+daemon. The TRX and coverage files are uploaded as build artefacts.
 
 ---
 
@@ -279,6 +294,7 @@ dotnet test --project tests/PhoneBook.Domain.UnitTests
 certificate (`dotnet dev-certs https --trust`).
 
 ```bash
+git clone https://github.com/PooriaGh/PhoneBook.git && cd PhoneBook
 dotnet run --project src/PhoneBook.Identity --launch-profile https   # https://localhost:7002
 dotnet run --project src/PhoneBook.Api --launch-profile https        # https://localhost:7001/swagger
 ```
@@ -307,6 +323,11 @@ docker compose up --build                       # API http://localhost:7001/swag
 docker compose --profile postgres up --build    # adds an API on PostgreSQL at http://localhost:7003
 ```
 
+The compose file, both Dockerfiles (multi-stage, non-root `app` user) and the fixed-issuer setup are in the
+repository. **The container stack has not been smoke-tested yet** (tasks T119/T126): the image build was
+interrupted during this session. The same code paths ran successfully as local processes (see the quickstart
+checklist above).
+
 Data lives in memory (by design) and is gone after a restart.
 
 ---
@@ -321,17 +342,20 @@ The work followed the Spec Kit flow. Each step produced a reviewable artefact in
    four prioritized user stories, acceptance scenarios, edge cases (Persian text and digits, case-insensitive
    tags, malformed ids, concurrency), 19 functional requirements and 6 measurable success criteria.
 2. **`/speckit-plan`** produced [`plan.md`](specs/001-phonebook-management/plan.md),
-   [`research.md`](specs/001-phonebook-management/research.md) (17 recorded decisions with alternatives),
+   [`research.md`](specs/001-phonebook-management/research.md) (18 recorded decisions with alternatives),
    [`data-model.md`](specs/001-phonebook-management/data-model.md), the
    [contracts](specs/001-phonebook-management/contracts) (OpenAPI and the token endpoint) and
    [`quickstart.md`](specs/001-phonebook-management/quickstart.md).
 3. **`/speckit-constitution`** ratified a [project constitution](.specify/memory/constitution.md) with seven
    principles (DDD, the Result pattern, two safety nets, CQRS, test discipline, secure by default,
    spec-driven delivery) and quality gates.
-4. **`/speckit-tasks`** produced [`tasks.md`](specs/001-phonebook-management/tasks.md) (124 tasks, ordered test-first).
+4. **`/speckit-tasks`** produced [`tasks.md`](specs/001-phonebook-management/tasks.md) (124 tasks, ordered
+   test-first; 130 after the convergence phase).
 5. **`/speckit-analyze`** was run repeatedly. It checks the spec, plan, tasks and constitution against each other.
 6. **`/speckit-implement`** executed the tasks phase by phase. Each checkpoint required a green full test
    suite and a 0-warning Release build.
+7. **`/speckit-converge`** compared the finished code with the spec, plan, tasks and constitution. It
+   appended the remaining work as a *Convergence* phase (T125–T130), which was then implemented (see below).
 
 ### What the analysis caught before any code was written
 
@@ -344,6 +368,16 @@ The work followed the Spec Kit flow. Each step produced a reviewable artefact in
 | K3 (critical) | the malformed-id route allowed anonymous access | `.RequireAuthorization()` + a 401 test |
 | P1 / P2 | SQLite and PostgreSQL order Persian text differently; SQLite shared-cache write locks | ordinal in-memory sort; `SqliteWriteGate` |
 | A3 | constitution Principle III was ambiguous about health checks and OAuth errors | constitution **v1.0.1** (PATCH amendment) |
+
+### What convergence caught after implementation
+
+| Finding | What was wrong | Fix |
+|---|---|---|
+| CI (T125) | the first GitHub Actions run failed: `--report-trx --coverage` needs Microsoft.Testing.Platform extensions, so zero tests ran | added `Microsoft.Testing.Extensions.TrxReport` and `CodeCoverage`; the same command passes locally (132/132) |
+| T127 | `Auth:RequireHttpsMetadata` was bound but had no effect (OpenIddict 7 has no such switch) | option removed |
+| T128 | an unused health-check package was declared | removed |
+| T130 | two deliberate deviations from the task wording were explained only in this README | recorded in `research.md` R-18 |
+| T126 / T129 | the compose stack and the in-browser Swagger "Authorize" flow were not yet verified | still open, see §11 |
 
 ### AI-assisted engineering (Claude Code)
 
@@ -363,6 +397,9 @@ The work followed the Spec Kit flow. Each step produced a reviewable artefact in
   * The architecture rule was narrowed to "no provider drivers in Application", because Dapper belongs to the
     read side there.
   * The end-to-end test uses static issuer configuration (see §10).
+  * Validators call the domain value-object factories instead of repeating the rules (`research.md` R-18).
+  * `Auth:RequireHttpsMetadata` was removed, because OpenIddict 7 validation accepts HTTP and HTTPS URLs and
+    offers no such switch.
 
 ---
 
