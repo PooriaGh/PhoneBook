@@ -888,3 +888,14 @@ After Phase 2:
 - Delivery gate (constitution): before declaring completion, **both** providers' test suites must be green, the build must have 0 warnings, and the quickstart must be validated.
 - Commit after each task or logical group, using the Co-Authored-By trailer if AI-assisted.
 - Stop at any checkpoint to validate a story on its own.
+
+---
+
+## Phase 9: Convergence
+
+- [ ] T125 Fix the CI test step in `.github/workflows/ci.yml`: Microsoft.Testing.Platform exits with code 5 on `--report-trx --coverage` because the extensions are not referenced. Add `Microsoft.Testing.Extensions.TrxReport` and `Microsoft.Testing.Extensions.CodeCoverage` to `Directory.Packages.props` and the four test projects, or drop the flags, then confirm a green GitHub Actions run, per T120 / Constitution V (contradicts)
+- [ ] T126 Build and smoke-test the Docker Compose stack in `docker-compose.yml`. Default profile: get a token from `http://localhost:7002/connect/token`, then create and search through `http://localhost:7001` using the fixed issuer `http://identity:8080/`. Postgres profile: do the same through `http://localhost:7003`. Fix any issues with the HTTP issuer or discovery, per T119 / plan: research R-12, U5 (partial)
+- [X] T127 Either apply `AuthOptions.RequireHttpsMetadata` to the OpenIddict validation configuration in `src/PhoneBook.Api/Infrastructure/Auth/AuthenticationSetup.cs`, or remove the option from `AuthOptions.cs` and `appsettings.json` if OpenIddict has no equivalent switch, per T055 / T119 (partial)
+- [X] T128 Remove the unused `AspNetCore.HealthChecks.NpgSql` entry from `Directory.Packages.props`, or reference it for a PostgreSQL readiness check in `src/PhoneBook.Infrastructure/DependencyInjection.cs`, per plan: health checks (unrequested)
+- [ ] T129 With both hosts running, do the in-browser Swagger UI walkthrough at `https://localhost:7001/swagger`: Authorize as `phonebook-swagger`, then call POST and GET. Tick the remaining item in the README quickstart checklist, per T124 / FR-015 / SC-001 (partial)
+- [X] T130 Record in `specs/001-phonebook-management/research.md` the two implementation decisions that differ from task wording: validators delegate to the domain value-object factories (`src/PhoneBook.Application/Contacts/ContactFieldRules.cs`) instead of NotEmpty/MaximumLength rules (T072), and the end-to-end test supplies the Identity issuer configuration statically instead of swapping HttpClient handlers (T107), per Constitution VII (contradicts)

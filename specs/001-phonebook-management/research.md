@@ -172,6 +172,19 @@ These four requirements conflict:
 - **Follow-up**: ✅ Fulfilled by constitution **v1.0.1**, whose Principle III now states this scope explicitly (finding V2).
 - **Real token challenges (finding U6)**: OpenIddict validation handles the 401 challenge itself and may write its own body, in which case `UseStatusCodePages` would not run. A validation event handler for `ProcessChallengeContext` writes the ProblemDetails (with `errorCode = Auth.Unauthorized`), keeps the `WWW-Authenticate` header, and marks the request handled. A `403` from the authorization middleware has an empty body, so status-code pages handle it. The end-to-end test with a real token checks both. The exact OpenIddict 7.x handler API must be confirmed against the installed package version before implementing.
 
+## R-18 Decisions made during implementation (reconciled after `/speckit-converge`)
+
+- **Validators call the domain factories** (tasks T072, T090). The task text asked for FluentValidation `NotEmpty`/`MaximumLength` rules that use the domain's length constants.
+  - **Decision**: `ContactFieldRules` (`src/PhoneBook.Application/Contacts/ContactFieldRules.cs`) calls `PersonName.Create`, `PhoneNumber.Create` and `Tag.Create`, and turns their `FieldError`s into validation failures. The only extra rule is a 64-character limit on the raw phone input (`PhoneNumber.TooLong`).
+  - **Rationale**: This goes further than finding D1 asked. No rule or error code is written twice, so the validator and the domain cannot disagree. It also reports *every* invalid field at once, as FR-012 requires. Shape-only rules would have stopped at the first empty field and never reported, for example, `PhoneNumber.InvalidCharacters` alongside a blank last name.
+  - **Alternatives**: separate FluentValidation rules that repeat the domain rules. Rejected because the rules would drift apart over time.
+- **The end-to-end token test supplies the issuer configuration directly** (task T107). The task text suggested pointing the API's `HttpClient` at the Identity test server's handler.
+  - **Decision**: the test reads the Identity host's discovery and JWKS documents, then sets `OpenIddictValidationOptions.Configuration` (issuer + signing keys) on the API under test.
+  - **Rationale**: validation stays real (real tokens, real keys, real OpenIddict validation) but needs no network and does not depend on how OpenIddict wires its internal HTTP client.
+  - **Coverage of the HTTP discovery path**: the quickstart run against both live HTTPS hosts (17/17) and the Docker Compose smoke test (plain HTTP, issuer `http://identity:8080/`).
+- **`Auth:RequireHttpsMetadata` removed** (tasks T055, T119, T127). OpenIddict 7.7.1 validation has no switch for requiring HTTPS metadata; its HTTP handlers accept both `http` and `https` URLs (`RequireHttpUri` filter). The option was bound from configuration but never read, so it was removed instead of being kept as configuration with no effect. Plain-HTTP operation in compose needs only `DisableTransportSecurityRequirement()` on the Identity host in Development.
+- **Test runner** (research R-14): the .NET 10 SDK requires Microsoft.Testing.Platform for `dotnet test` (`global.json` → `"test": { "runner": "Microsoft.Testing.Platform" }`). Filters use `--filter-class`/`--filter-method`/`--filter-query` instead of VSTest `--filter`. CI's `--report-trx --coverage` needs the `Microsoft.Testing.Extensions.TrxReport` and `Microsoft.Testing.Extensions.CodeCoverage` packages (task T125).
+
 ## R-16 Environment findings
 
 - SDKs 10.0.300 and 10.0.400 are installed. ✅

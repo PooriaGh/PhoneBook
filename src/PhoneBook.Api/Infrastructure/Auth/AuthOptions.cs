@@ -16,7 +16,5 @@ public sealed class AuthOptions
     [Required]
     public string Audience { get; set; } = "phonebook-api";
 
-    public bool RequireHttpsMetadata { get; set; } = true;
-
     public string EffectivePublicAuthority => string.IsNullOrWhiteSpace(PublicAuthority) ? Authority : PublicAuthority;
 }
