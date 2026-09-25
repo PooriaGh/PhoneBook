@@ -17,7 +17,7 @@
 
 | Check | Result |
 |---|---|
-| Automated tests (Release, 0 build warnings) | **220 / 220** passing (feature 001: 132 on GitHub Actions) |
+| Automated tests (Release, 0 build warnings) | **220 / 220** passing, locally and on GitHub Actions (run 36166483204) |
 | Feature 001 quickstart against both hosts over HTTPS | **17 / 17** |
 | Feature 001 Docker Compose smoke test (SQLite and PostgreSQL profiles) | **14 / 14** |
 | Swagger UI "Authorize" walkthrough in a browser (feature 001) | done |
