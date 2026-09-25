@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Options;
 using OpenIddict.Abstractions;
 using PhoneBook.Identity.Data;
+using PhoneBook.Identity.Users;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace PhoneBook.Identity.Seeding;
@@ -55,6 +56,9 @@ internal sealed class IdentitySeeder(IServiceProvider serviceProvider, IOptions<
         }
 
         await SeedSwaggerUiClientAsync(applicationManager, cancellationToken);
+
+        // End users are hashed (Development) or reported as ignored (elsewhere) at start-up, not on the first sign-in.
+        serviceProvider.GetRequiredService<InMemoryUserStore>().Initialize();
     }
 
     /// <summary>

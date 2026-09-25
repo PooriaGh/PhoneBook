@@ -34,6 +34,12 @@ public sealed partial class InMemoryUserStore
 
     private static IdentityUser Placeholder { get; } = new(Guid.Empty, string.Empty, string.Empty, string.Empty, []);
 
+    /// <summary>
+    /// Builds the user map now: hashes the configured passwords, or outside Development logs that configured users
+    /// are ignored. Called once at start-up by the seeder (data-model §5, research R-08). Returns the number of users.
+    /// </summary>
+    public int Initialize() => _users.Value.Count;
+
     public IdentityUser? ValidateCredentials(string? userName, string? password)
     {
         if (string.IsNullOrEmpty(userName) || password is null

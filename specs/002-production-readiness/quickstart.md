@@ -15,7 +15,7 @@ dotnet test --solution PhoneBook.slnx -c Release # Docker running (Testcontainer
 **Expected**: all feature-001 tests pass, apart from the tag-search tests, which are updated to the paged shape.
 The new suites for paging, rate limiting, telemetry and end-user sign-in pass on both providers where relevant.
 
-**Result (2026-09-25):** Release build with 0 warnings; **219 / 219** tests passing (Domain 45, API 115, Identity 50,
+**Result (2026-09-25):** Release build with 0 warnings; **220 / 220** tests passing (Domain 45, API 115, Identity 51,
 Architecture 9), on SQLite and PostgreSQL.
 
 ## 2. Manual scenarios (both hosts running, as in the feature 001 quickstart §2)

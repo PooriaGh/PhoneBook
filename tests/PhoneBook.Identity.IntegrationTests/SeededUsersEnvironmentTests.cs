@@ -33,4 +33,22 @@ public sealed class SeededUsersEnvironmentTests
         logs.ShouldContain("HTTP \"POST\" \"/account/login\"", Case.Sensitive, "request logs must reach this host's own sinks");
         logs.ShouldNotContain("prod-alice");
     }
+
+    [Fact]
+    public async Task Production_WarnsAtStartup_WithoutAnySignIn()
+    {
+        await using var production = new ConfiguredIdentityFactory(
+            new Dictionary<string, string>
+            {
+                ["Identity:Users:0:UserName"] = "prod-bob",
+                ["Identity:Users:0:Password"] = "prod-bob-password",
+            },
+            environment: "Production");
+
+        _ = production.Services; // start the host; no request is sent
+
+        var logs = string.Join('\n', production.Logs.Entries);
+        logs.ShouldContain("Configured users ignored outside Development");
+        logs.ShouldNotContain("prod-bob");
+    }
 }

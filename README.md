@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/PooriaGh/PhoneBook/actions/workflows/ci.yml/badge.svg)](https://github.com/PooriaGh/PhoneBook/actions/workflows/ci.yml)
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
-![Tests](https://img.shields.io/badge/tests-219%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-220%20passing-brightgreen)
 
 > **Cover letter** for the backend developer assignment of **Hasin Group (گروه حصین)**.
 > This README explains the architecture, the technology choices, how to run and test the solution, and the
@@ -17,7 +17,7 @@
 
 | Check | Result |
 |---|---|
-| Automated tests (Release, 0 build warnings) | **219 / 219** passing (feature 001: 132 on GitHub Actions) |
+| Automated tests (Release, 0 build warnings) | **220 / 220** passing (feature 001: 132 on GitHub Actions) |
 | Feature 001 quickstart against both hosts over HTTPS | **17 / 17** |
 | Feature 001 Docker Compose smoke test (SQLite and PostgreSQL profiles) | **14 / 14** |
 | Swagger UI "Authorize" walkthrough in a browser (feature 001) | done |
@@ -281,13 +281,13 @@ a vault, persist the OpenIddict store, and replace the configuration-seeded user
 ## 10. Testing strategy
 
 **Result of the final run** (`dotnet build -c Release` with 0 warnings; `dotnet test --solution PhoneBook.slnx -c Release`):
-**219 tests, 219 passed, 0 failed** (feature 001: 132).
+**220 tests, 220 passed, 0 failed** (feature 001: 132).
 
 | Project | Tests |
 |---|---|
 | Domain unit tests | 45 |
 | API integration tests (PostgreSQL + in-memory SQLite) | 115 |
-| Identity integration tests (incl. end-to-end and sign-in) | 50 |
+| Identity integration tests (incl. end-to-end and sign-in) | 51 |
 | Architecture tests | 9 |
 
 | Project | Kind | What it proves |

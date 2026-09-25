@@ -738,3 +738,10 @@ they share the `Program.cs` hotspots.
 - **Performance tests** (T020, T042) carry `[Trait("Category", "Performance")]`, so CI can filter them if the
   runners are slow.
 - **Commits**: commit after each checkpoint, with no Co-Authored-By trailer (constitution v1.0.2, workflow gate 6). Push only on request.
+
+---
+
+## Phase 8: Convergence
+
+- [ ] T082 After the user approves pushing the feature-002 commits, confirm the GitHub Actions run of `.github/workflows/ci.yml` is green with all 220 tests, including the 100,000-contact SC-001 performance tests on both providers. If the 500 ms bound is unstable on the hosted runner, handle it explicitly (for example, run `[Trait("Category", "Performance")]` tests in a separate CI job) and document it in the README, instead of weakening SC-001. Per T081 / SC-001 / constitution gate 5 (partial)
+- [X] T083 Build `InMemoryUserStore` when the Identity host starts, not on the first sign-in request: hash the configured passwords at start-up, and outside Development log the "Configured users ignored outside Development" warning at start-up. For example, resolve the store and force its user map in `src/PhoneBook.Identity/Seeding/IdentitySeeder.cs` `StartAsync`. Add a test in `tests/PhoneBook.Identity.IntegrationTests/SeededUsersEnvironmentTests.cs` that the Production warning appears after start-up with no sign-in request. Per data-model §5 ("PasswordHash … at start-up") / research R-08 (partial)
