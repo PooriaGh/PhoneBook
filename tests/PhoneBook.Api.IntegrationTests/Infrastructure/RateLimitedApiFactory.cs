@@ -30,12 +30,18 @@ public sealed class RateLimitedApiFactory(int windowSeconds = 60)
 
     public HttpClient CreateClientWithScopes(string? scopes = null) => CreateClient().WithScopes(scopes);
 
+    public TelemetryCapture Capture { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("Database:Provider", "Sqlite");
         builder.UseSetting("Database:ConnectionString", _connectionString);
         builder.UseSetting("RateLimiting:Api:PermitLimit", PermitLimit.ToString(System.Globalization.CultureInfo.InvariantCulture));
         builder.UseSetting("RateLimiting:Api:WindowSeconds", windowSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        builder.ConfigureTestServices(services => services.AddTestAuthentication());
+        builder.ConfigureTestServices(services =>
+        {
+            services.AddTestAuthentication();
+            Capture.AddTo(services);
+        });
     }
 }

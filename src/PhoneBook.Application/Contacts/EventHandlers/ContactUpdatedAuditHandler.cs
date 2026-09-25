@@ -1,15 +1,17 @@
 using MediatR;
 using Microsoft.Extensions.Logging;
 using PhoneBook.Application.Abstractions.Events;
+using PhoneBook.Application.Abstractions.Telemetry;
 using PhoneBook.Domain.Contacts.Events;
 
 namespace PhoneBook.Application.Contacts.EventHandlers;
 
-internal sealed partial class ContactUpdatedAuditHandler(ILogger<ContactUpdatedAuditHandler> logger)
+internal sealed partial class ContactUpdatedAuditHandler(ILogger<ContactUpdatedAuditHandler> logger, PhoneBookMetrics metrics)
     : INotificationHandler<DomainEventNotification<ContactUpdatedDomainEvent>>
 {
     public Task Handle(DomainEventNotification<ContactUpdatedDomainEvent> notification, CancellationToken cancellationToken)
     {
+        metrics.ContactsUpdated.Add(1);
         LogUpdated(logger, notification.DomainEvent.ContactId.Value);
         return Task.CompletedTask;
     }

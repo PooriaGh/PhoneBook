@@ -320,7 +320,7 @@ span, the command span and the persistence span. A `404`'s `traceId` equals its 
 
 ### Tests for User Story 3 ⚠️ (write first; they must fail)
 
-- [ ] T038 [US3] Create `tests/PhoneBook.Api.IntegrationTests/Infrastructure/TelemetryCapture.cs` (research R-07):
+- [X] T038 [US3] Create `tests/PhoneBook.Api.IntegrationTests/Infrastructure/TelemetryCapture.cs` (research R-07):
   - It holds thread-safe collections of `Activity` and `Metric`.
   - `AddTo(IServiceCollection)` calls `services.ConfigureOpenTelemetryTracerProvider(b => b.AddInMemoryExporter(...))` and `ConfigureOpenTelemetryMeterProvider(b => b.AddInMemoryExporter(...))`.
   - `ForTrace(ActivityTraceId)` returns the spans of one trace.
@@ -331,7 +331,7 @@ span, the command span and the persistence span. A `404`'s `traceId` equals its 
   - **Log capture** (research R-08): `LogCapture : ILogEventSink` holds rendered messages and property values. It is registered as a singleton `ILogEventSink` in DI, where Serilog's `ReadFrom.Services` picks it up. `AllRecordedText()` includes it.
 
   Add `TelemetryCapture Capture { get; }` to `.../IPhoneBookApiFactory.cs`, if T028 has not already added it (I2). Attach a capture in `PhoneBookApiFactory` and `SqliteApiFactory` through `ConfigureTestServices`; this is always on and harmless. **No separate PostgreSQL telemetry factory**: PostgreSQL telemetry tests use the `Postgres` collection's shared host, so no second host resets the database while tests run (analyze T2). Tests read only the spans of their own requests (`ForTrace`), because `ActivitySource`s are process-wide.
-- [ ] T039 [P] [US3] Create `tests/PhoneBook.Api.IntegrationTests/Telemetry/TracingTests.cs`: an abstract base, with sealed subclasses in `[Collection(IntegrationTestCollection.Name)]` and `[Collection(SqliteIntegrationTestCollection.Name)]`. Each test reads its trace id from the response `traceId` or from a `traceparent` header it sends, then asserts on `Capture.ForTrace(id)`:
+- [X] T039 [P] [US3] Create `tests/PhoneBook.Api.IntegrationTests/Telemetry/TracingTests.cs`: an abstract base, with sealed subclasses in `[Collection(IntegrationTestCollection.Name)]` and `[Collection(SqliteIntegrationTestCollection.Name)]`. Each test reads its trace id from the response `traceId` or from a `traceparent` header it sends, then asserts on `Capture.ForTrace(id)`:
   - **AC1**: `POST /api/v1/contacts` → spans in one trace:
     - a server span with the templated `http.route`
     - a `PhoneBook.Application` span `CreateContactCommand` with `phonebook.result=success`, whose parent chain reaches the server span
@@ -341,59 +341,61 @@ span, the command span and the persistence span. A `404`'s `traceId` equals its 
   - **Incoming propagation**: a request carrying a W3C `traceparent` produces spans with that trace id.
   - A failed command's span has `phonebook.result` equal to the error code and status `Error`.
   - A tag search produces a `PhoneBook.Persistence` span `query.contacts_by_tag`.
-- [ ] T040 [P] [US3] Create `tests/PhoneBook.Api.IntegrationTests/Telemetry/MetricsTests.cs` (SQLite collection). Measure with `new MetricCollector<long>(factory.Services.GetRequiredService<IMeterFactory>(), "PhoneBook", "<instrument>")`, created at the start of each test; it sees only this host's meters (M1).
+- [X] T040 [P] [US3] Create `tests/PhoneBook.Api.IntegrationTests/Telemetry/MetricsTests.cs` (SQLite collection). Measure with `new MetricCollector<long>(factory.Services.GetRequiredService<IMeterFactory>(), "PhoneBook", "<instrument>")`, created at the start of each test; it sees only this host's meters (M1).
   - **AC3**: after one create, one update and one delete, `phonebook.contacts.created`, `.updated` and `.deleted` each record exactly 1.
   - `http.server.request.duration`, collected through a `MetricCollector<double>` on meter `Microsoft.AspNetCore.Hosting`, has a measurement tagged with `http.route`, `http.response.status_code` and `http.request.method`.
   - **Rate limiting** (with a fresh `RateLimitedApiFactory`):
     - `phonebook.ratelimit.rejections` with `policy=api` records 1 per `429`
     - **edge case, G2**: the `429` response's `traceId` has a server span in `Capture.ForTrace(...)` with `http.response.status_code=429`
-- [ ] T041 [P] [US3] Create `tests/PhoneBook.Api.IntegrationTests/Telemetry/PersonalDataTelemetryTests.cs` (FR-016, SC-006, AC5): an abstract base, with sealed subclasses in the `Postgres` and `Sqlite` collections.
+- [X] T041 [P] [US3] Create `tests/PhoneBook.Api.IntegrationTests/Telemetry/PersonalDataTelemetryTests.cs` (FR-016, SC-006, AC5): an abstract base, with sealed subclasses in the `Postgres` and `Sqlite` collections.
   1. Use distinctive values: first name `Zyxwvfirst`, last name `Qponmlast`, phone `09129998877`, tag `tag-qqzz-secret`, and a Persian name `ژاله‌تست`.
   2. Run create, get by id, search by tag (with page parameters), update, a validation failure echoing the values, a duplicate conflict and delete.
   3. Flush, then assert that no value from step 1 appears in `Capture.AllRecordedText()` (spans, metrics **and logs**), case-insensitively. This deliberately scans **everything** the host captured, not only this test's traces.
-  4. Assert that no span has a `url.query` tag containing `tag=`, and that no span has a `client.address` tag. The texts `127.0.0.1` and `::1` must not appear either.
-- [ ] T042 [P] [US3] Create `tests/PhoneBook.Api.IntegrationTests/Telemetry/TelemetryResilienceTests.cs` (AC4, FR-017; research R-04):
+  4. Assert that no span has a `url.query` tag containing `tag=`, and that no span has a `client.address` tag.
+     *Implementation note:* the literal texts `127.0.0.1` and `::1` are not scanned. Npgsql spans legitimately carry the database server's address (`server.address`), which is infrastructure data, while FR-016 forbids *client* addresses, and those are covered by the `client.address` check.
+- [X] T042 [P] [US3] Create `tests/PhoneBook.Api.IntegrationTests/Telemetry/TelemetryResilienceTests.cs` (AC4, FR-017; research R-04):
   - **Unreachable exporter**: a fresh SQLite factory whose `ConfigureTestServices` adds `AddOtlpExporter(o => o.Endpoint = new Uri("http://127.0.0.1:9"))` to both providers → 50 mixed requests all return their normal status, and no single request takes 1 s or more. This proves export never blocks.
   - **Default configuration** (empty `Telemetry:OtlpEndpoint`) → requests succeed.
   - The 5% comparison in SC-005 is measured manually (quickstart #13, T080). No latency ratio is asserted in CI (analyze A1).
-- [ ] T043 [P] [US3] Create `tests/PhoneBook.Api.IntegrationTests/Telemetry/OutgoingCallTracingTests.cs`, for the phone book service's half of FR-012 as clarified (research R-04):
+- [X] T043 [P] [US3] Create `tests/PhoneBook.Api.IntegrationTests/Telemetry/OutgoingCallTracingTests.cs`, for the phone book service's half of FR-012 as clarified (research R-04):
   - Start a parent span with `using var parent = PhoneBookTelemetry.Application.StartActivity("test.outgoing")`. This source is already recorded by the host's tracer (U1).
   - Inside it, create a client from the SQLite host's `IHttpClientFactory`, using the default socket primary handler so .NET's HTTP diagnostics run, and `GET http://127.0.0.1:9/.well-known/openid-configuration`. The connection is refused.
   - Assert that `Capture.ForTrace(parent.TraceId)` holds an HTTP client span whose `ParentSpanId` equals `parent.SpanId`, with `http.request.method=GET`, a `server.address`, and **no** `url.query`.
   - In-process `TestServer` handlers bypass .NET's HTTP diagnostics, so a real socket handler is required here.
-- [ ] T044 [P] [US3] Create `tests/PhoneBook.Identity.IntegrationTests/TelemetryTests.cs`. Attach an in-memory exporter to a fresh `IdentityFactory` subclass via `ConfigureTestServices`.
+- [X] T044 [P] [US3] Create `tests/PhoneBook.Identity.IntegrationTests/TelemetryTests.cs`. Attach an in-memory exporter to a fresh `IdentityFactory` subclass via `ConfigureTestServices`.
   - A client-credentials token request produces a server span for `/connect/token`.
   - **FR-016**: create `tests/PhoneBook.Identity.IntegrationTests/Infrastructure/LogCapture.cs`, this project's own `ILogEventSink` holding rendered messages and property values. This project does not reference `PhoneBook.Api.IntegrationTests` (research R-07, analyze U1). Register it as a singleton `ILogEventSink` in the Identity factory via `ConfigureTestServices`. After a token request and a sign-in (wrong and right password), no span, metric or log contains the client secret, `client_secret=`, the `access_token` value, `alice`, `alice-dev-password` or `127.0.0.1`.
   - **FR-012, the identity side**: `GET /.well-known/openid-configuration` sent with a W3C `traceparent` header produces a server span that continues that trace id. Together with T043, this proves one trace across both services. The live end-to-end view is quickstart #11.
   - `phonebook.ratelimit.rejections` with `policy=token` records 1 after a `429`. Use a fresh `RateLimitedIdentityFactory` and a `MetricCollector<long>` bound to its `IMeterFactory`.
-- [ ] T045 [P] [US3] Extend `tests/PhoneBook.ArchitectureTests/LayerDependencyTests.cs`:
+- [X] T045 [P] [US3] Extend `tests/PhoneBook.ArchitectureTests/LayerDependencyTests.cs`:
   - add `"OpenTelemetry"` to the forbidden list for Domain, SharedKernel and Application, since Application may use BCL `System.Diagnostics` only (plan, Structure Decision)
   - add a test that `PhoneBookTelemetry` lives in `PhoneBook.Application.Abstractions.Telemetry`
 
 ### Implementation for User Story 3
 
-- [ ] T046 [US3] Update `src/PhoneBook.Application/Abstractions/Behaviors/LoggingBehavior.cs`:
+- [X] T046 [US3] Update `src/PhoneBook.Application/Abstractions/Behaviors/LoggingBehavior.cs`:
   - wrap `next` in `using var activity = PhoneBookTelemetry.Application.StartActivity(requestName)`
   - set `phonebook.request` to the request type name
   - after the call, set `phonebook.result` to `success` or `response.Error.Code`, and on failure call `activity.SetStatus(ActivityStatusCode.Error, response.Error.Code)`
   - never tag request field values, and add no try/catch
-- [ ] T047 [US3] Add `string ProviderName { get; }` to `src/PhoneBook.Application/Abstractions/Data/ISqlConnectionFactory.cs`, returning `"sqlite"` or `"postgresql"`, and implement it in `src/PhoneBook.Infrastructure/Persistence/SqlConnectionFactory.cs` from `DatabaseOptions.Provider`. It supplies `db.system` without a driver reference in Application.
-- [ ] T048 [US3] In `src/PhoneBook.Application/Contacts/GetByTag/GetContactsByTagQueryHandler.cs`, wrap the COUNT and page queries in `PhoneBookTelemetry.Persistence.StartActivity("query.contacts_by_tag", ActivityKind.Client)` with the tags `db.system` (from `ProviderName`) and `db.operation=query.contacts_by_tag`. Record no parameter values.
-- [ ] T049 [US3] In `src/PhoneBook.Infrastructure/Persistence/WriteDbContext.cs`, start a `PhoneBookTelemetry.Persistence` activity `save` (`ActivityKind.Client`) in `IUnitOfWork.SaveChangesAsync`:
+- [X] T047 [US3] Add `string ProviderName { get; }` to `src/PhoneBook.Application/Abstractions/Data/ISqlConnectionFactory.cs`, returning `"sqlite"` or `"postgresql"`, and implement it in `src/PhoneBook.Infrastructure/Persistence/SqlConnectionFactory.cs` from `DatabaseOptions.Provider`. It supplies `db.system` without a driver reference in Application.
+- [X] T048 [US3] In `src/PhoneBook.Application/Contacts/GetByTag/GetContactsByTagQueryHandler.cs`, wrap the COUNT and page queries in `PhoneBookTelemetry.Persistence.StartActivity("query.contacts_by_tag", ActivityKind.Client)` with the tags `db.system` (from `ProviderName`) and `db.operation=query.contacts_by_tag`. Record no parameter values.
+- [X] T049 [US3] In `src/PhoneBook.Infrastructure/Persistence/WriteDbContext.cs`, start a `PhoneBookTelemetry.Persistence` activity `save` (`ActivityKind.Client`) in `IUnitOfWork.SaveChangesAsync`:
   - tag `db.system` from `Database.IsNpgsql()` / `IsSqlite()`, and `db.operation=save`
   - when the method returns a failure `Result` (the existing catch-and-translate path), set status `Error` with the error code
   - do not add a new catch
-- [ ] T050 [P] [US3] Inject `PhoneBookMetrics` into the existing domain-event handlers and increment the counters:
+- [X] T050 [P] [US3] Inject `PhoneBookMetrics` into the existing domain-event handlers and increment the counters:
   - `ContactsCreated.Add(1)` in `src/PhoneBook.Application/Contacts/EventHandlers/ContactCreatedAuditHandler.cs`
   - `ContactsUpdated.Add(1)` in `.../ContactUpdatedAuditHandler.cs`
   - `ContactsDeleted.Add(1)` in `.../ContactDeletedAuditHandler.cs`
   - `ContactTagChangedAuditHandler` gets no counter: a tag change is also an update
-- [ ] T051 [P] [US3] Create `src/PhoneBook.Api/Infrastructure/TraceIds.cs` with `public static string Current(HttpContext context) => Activity.Current?.TraceId.ToHexString() ?? context.TraceIdentifier`. Use it:
-  - in `Program.cs` `CustomizeProblemDetails` (replacing `Activity.Current?.Id`)
+  - *Implementation note (FR-016):* the created, deleted and tag-changed audit log messages no longer include tag values, only the contact id. The personal-data scan (T041) covers logs.
+- [X] T051 [P] [US3] Create `src/PhoneBook.Api/Infrastructure/TraceIds.cs` with `public static string Current(HttpContext context) => Activity.Current?.TraceId.ToHexString() ?? context.TraceIdentifier`. Use it:
+  - in `Program.cs` `CustomizeProblemDetails` (replacing `Activity.Current?.Id`). *Implementation note:* this assigns `extensions["traceId"]` rather than calling `TryAdd`, because ASP.NET Core pre-fills `traceId` with the full `traceparent`.
   - in `src/PhoneBook.Api/Infrastructure/GlobalExceptionHandler.cs` line 30
 
   Add an XML comment explaining FR-013 and research R-04.
-- [ ] T052 [US3] Create `src/PhoneBook.Api/Infrastructure/Telemetry/TelemetryOptions.cs` (section `Telemetry`, `string? OtlpEndpoint`) and `src/PhoneBook.Api/Infrastructure/Telemetry/TelemetrySetup.cs` with `AddPhoneBookTelemetry(this WebApplicationBuilder)`:
+- [X] T052 [US3] Create `src/PhoneBook.Api/Infrastructure/Telemetry/TelemetryOptions.cs` (section `Telemetry`, `string? OtlpEndpoint`) and `src/PhoneBook.Api/Infrastructure/Telemetry/TelemetrySetup.cs` with `AddPhoneBookTelemetry(this WebApplicationBuilder)`:
   - **Resource**: `AddService("phonebook-api", serviceVersion: assembly informational version)`.
   - **Tracing**:
     - `AddAspNetCoreInstrumentation`:
@@ -407,8 +409,8 @@ span, the command span and the persistence span. A `404`'s `traceId` equals its 
     - `AddAspNetCoreInstrumentation()`
     - `AddMeter("Microsoft.AspNetCore.Hosting", "Microsoft.AspNetCore.Server.Kestrel", "Microsoft.AspNetCore.RateLimiting", "PhoneBook")`
   - **Export**: register `UseOtlpExporter(OtlpExportProtocol.Grpc, new Uri(endpoint))` **only** when `builder.Configuration["Telemetry:OtlpEndpoint"]` is non-empty (FR-015). Tests attach exporters through `ConfigureTestServices` instead of overriding this key, so reading configuration at registration is acceptable here. Record that exception in a comment.
-- [ ] T053 [US3] Call `builder.AddPhoneBookTelemetry()` in `src/PhoneBook.Api/Program.cs`, and add `"Telemetry": { "OtlpEndpoint": "" }` to `src/PhoneBook.Api/appsettings.json`.
-- [ ] T054 [P] [US3] Create `src/PhoneBook.Identity/Telemetry/TelemetrySetup.cs`, mirroring T052 without Npgsql and application sources:
+- [X] T053 [US3] Call `builder.AddPhoneBookTelemetry()` in `src/PhoneBook.Api/Program.cs`, and add `"Telemetry": { "OtlpEndpoint": "" }` to `src/PhoneBook.Api/appsettings.json`.
+- [X] T054 [P] [US3] Create `src/PhoneBook.Identity/Telemetry/TelemetrySetup.cs`, mirroring T052 without Npgsql and application sources:
   - service name `phonebook-identity`
   - `url.query` and `client.address` scrubbed
   - `/health` filtered out
@@ -416,7 +418,7 @@ span, the command span and the persistence span. A `404`'s `traceId` equals its 
   - the same conditional OTLP export
 
   Call it from `src/PhoneBook.Identity/Program.cs`, and add `"Telemetry": { "OtlpEndpoint": "" }` to `src/PhoneBook.Identity/appsettings.json`. Request bodies (form fields such as `client_secret` and `password`) must never be recorded: do not enable any body enrichment.
-- [ ] T055 [P] [US3] In `docker-compose.yml`:
+- [X] T055 [P] [US3] In `docker-compose.yml`:
   - add the service `aspire-dashboard`:
     - image `mcr.microsoft.com/dotnet/aspire-dashboard:13.5`
     - `profiles: [observability]`
@@ -424,7 +426,7 @@ span, the command span and the persistence span. A `404`'s `traceId` equals its 
     - environment `DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: "true"`, with the comment "DEV-ONLY: no dashboard auth"
   - add `Telemetry__OtlpEndpoint: http://aspire-dashboard:18889` to `identity`, `api` and `api-postgres`. When the profile is off, export fails quietly (FR-017).
   - update the header comment with `docker compose --profile observability up --build`
-- [ ] T056 [US3] Checkpoint. All US3 tests pass on both providers where relevant, every feature-001 test that checks `traceId` presence still passes, and the build has 0 warnings.
+- [X] T056 [US3] Checkpoint. All US3 tests pass on both providers where relevant, every feature-001 test that checks `traceId` presence still passes, and the build has 0 warnings.
 
 **Checkpoint**: US1, US2 and US3 all work on their own.
 

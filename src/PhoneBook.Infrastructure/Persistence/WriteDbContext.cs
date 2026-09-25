@@ -1,8 +1,10 @@
+using System.Diagnostics;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using PhoneBook.Application.Abstractions.Data;
 using PhoneBook.Application.Abstractions.Events;
+using PhoneBook.Application.Abstractions.Telemetry;
 using PhoneBook.Domain.Contacts;
 using PhoneBook.Infrastructure.Persistence.Configurations;
 using PhoneBook.SharedKernel.Domain;
@@ -33,10 +35,18 @@ public sealed class WriteDbContext(
         var domainEvents = aggregates.SelectMany(a => a.DomainEvents).ToList();
         aggregates.ForEach(a => a.ClearDomainEvents());
 
-        var saveResult = await SaveWithGateAsync(cancellationToken).ConfigureAwait(false);
-        if (saveResult.IsFailure)
+        // Persistence span (feature 002, research R-04); the failure path is the existing Result translation.
+        using (var activity = PhoneBookTelemetry.Persistence.StartActivity("save", ActivityKind.Client))
         {
-            return saveResult;
+            activity?.SetTag(PhoneBookTelemetry.DbSystemTag, Database.IsNpgsql() ? "postgresql" : "sqlite");
+            activity?.SetTag(PhoneBookTelemetry.DbOperationTag, "save");
+
+            var saveResult = await SaveWithGateAsync(cancellationToken).ConfigureAwait(false);
+            if (saveResult.IsFailure)
+            {
+                activity?.SetStatus(ActivityStatusCode.Error, saveResult.Error.Code);
+                return saveResult;
+            }
         }
 
         await domainEventDispatcher.DispatchAsync(domainEvents, cancellationToken).ConfigureAwait(false);

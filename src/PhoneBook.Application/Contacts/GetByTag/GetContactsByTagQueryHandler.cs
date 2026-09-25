@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using Dapper;
 using PhoneBook.Application.Abstractions.Data;
 using PhoneBook.Application.Abstractions.Messaging;
 using PhoneBook.Application.Abstractions.Paging;
+using PhoneBook.Application.Abstractions.Telemetry;
 using PhoneBook.Domain.Contacts;
 using PhoneBook.SharedKernel.Results;
 
@@ -31,6 +33,12 @@ internal sealed class GetContactsByTagQueryHandler(ISqlConnectionFactory connect
     {
         var normalizedTag = Tag.Normalize(query.Tag);
         var skip = (long)(query.Page - 1) * query.PageSize;
+
+        // Persistence span (feature 002, research R-04): also covers SQLite, which emits no database spans itself.
+        // No parameter values are recorded (FR-016).
+        using var activity = PhoneBookTelemetry.Persistence.StartActivity("query.contacts_by_tag", ActivityKind.Client);
+        activity?.SetTag(PhoneBookTelemetry.DbSystemTag, connectionFactory.ProviderName);
+        activity?.SetTag(PhoneBookTelemetry.DbOperationTag, "query.contacts_by_tag");
 
         var connection = connectionFactory.CreateConnection();
         await using (connection.ConfigureAwait(false))

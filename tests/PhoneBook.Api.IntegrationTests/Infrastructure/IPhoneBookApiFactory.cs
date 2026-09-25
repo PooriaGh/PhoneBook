@@ -8,4 +8,7 @@ public interface IPhoneBookApiFactory
     Task ResetDatabaseAsync();
 
     HttpClient CreateClientWithScopes(string? scopes = null);
+
+    /// <summary>Spans, metrics and logs recorded by this host (feature 002, research R-07).</summary>
+    TelemetryCapture Capture { get; }
 }

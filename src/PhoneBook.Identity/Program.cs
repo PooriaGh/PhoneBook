@@ -74,6 +74,7 @@ builder.Services.AddOptions<CorsOptions>()
 builder.Services.AddAuthorization();
 builder.Services.AddSingleton<IdentityMetrics>();
 builder.Services.AddIdentityRateLimiting();
+builder.AddIdentityTelemetry();
 builder.Services.AddHostedService<IdentitySeeder>();
 builder.Services.AddHealthChecks().AddDbContextCheck<IdentityDbContext>("database", tags: ["ready"]);
 

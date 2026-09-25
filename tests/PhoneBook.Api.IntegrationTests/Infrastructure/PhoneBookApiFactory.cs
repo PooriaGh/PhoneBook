@@ -39,6 +39,8 @@ public sealed class PhoneBookApiFactory(PostgresContainerFixture postgres)
 
     public HttpClient CreateClientWithScopes(string? scopes = null) => CreateClient().WithScopes(scopes);
 
+    public TelemetryCapture Capture { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("Database:Provider", "Postgres");
@@ -46,7 +48,11 @@ public sealed class PhoneBookApiFactory(PostgresContainerFixture postgres)
 
         // Effectively unlimited, so load tests never hit the rate limiter (feature 002, research R-03).
         builder.UseSetting("RateLimiting:Api:PermitLimit", "1000000");
-        builder.ConfigureTestServices(services => services.AddTestAuthentication());
+        builder.ConfigureTestServices(services =>
+        {
+            services.AddTestAuthentication();
+            Capture.AddTo(services);
+        });
     }
 
     public override async ValueTask DisposeAsync()

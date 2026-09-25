@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 
@@ -27,7 +26,7 @@ internal sealed partial class GlobalExceptionHandler(
             Detail = environment.IsDevelopment() ? exception.Message : null,
         };
         problem.Extensions["errorCode"] = "General.Unexpected";
-        problem.Extensions["traceId"] = Activity.Current?.Id ?? httpContext.TraceIdentifier;
+        problem.Extensions["traceId"] = TraceIds.Current(httpContext);
 
         return await problemDetailsService.TryWriteAsync(new ProblemDetailsContext
         {

@@ -1,6 +1,8 @@
 # PhoneBook: API + separate OpenIddict identity server.
 #   docker compose up --build                      -> API on in-memory SQLite (default)
 #   docker compose --profile postgres up --build   -> additionally an API instance on PostgreSQL (port 7003)
+#   docker compose --profile observability up --build -> additionally the Aspire dashboard (http://localhost:18888)
+#       showing traces and metrics from both hosts (feature 002). Without the profile, export fails quietly.
 #
 # Swagger UI: http://localhost:7001/swagger  (Authorize with client "phonebook-swagger").
 # The browser fetches tokens from localhost:7002, but the issuer is fixed to http://identity:8080/, which the
@@ -19,6 +21,7 @@ services:
       Identity__Issuer: http://identity:8080/
       Identity__AllowedCorsOrigins__0: http://localhost:7001
       Identity__AllowedCorsOrigins__1: http://localhost:7003
+      Telemetry__OtlpEndpoint: http://aspire-dashboard:18889
 
   api:
     build:
@@ -30,6 +33,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       Auth__Authority: http://identity:8080/
       Auth__PublicAuthority: http://localhost:7002
+      Telemetry__OtlpEndpoint: http://aspire-dashboard:18889
     depends_on:
       - identity
 
@@ -63,8 +67,19 @@ services:
       Database__Provider: Postgres
       # DEV-ONLY credentials.
       Database__ConnectionString: Host=postgres;Database=phonebook;Username=postgres;Password=postgres
+      Telemetry__OtlpEndpoint: http://aspire-dashboard:18889
     depends_on:
       identity:
         condition: service_started
       postgres:
         condition: service_healthy
+
+  # Local OTLP receiver with a trace and metric UI (feature 002, research R-04). MIT-licensed.
+  aspire-dashboard:
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:13.5
+    profiles: [observability]
+    ports:
+      - "18888:18888"
+    environment:
+      # DEV-ONLY: no dashboard authentication.
+      DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: "true"

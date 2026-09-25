@@ -13,4 +13,6 @@ internal sealed class SqlConnectionFactory(IOptions<DatabaseOptions> options) : 
         DatabaseProvider.Postgres => new NpgsqlConnection(options.Value.ConnectionString),
         _ => new SqliteConnection(options.Value.ConnectionString),
     };
+
+    public string ProviderName => options.Value.Provider == DatabaseProvider.Postgres ? "postgresql" : "sqlite";
 }

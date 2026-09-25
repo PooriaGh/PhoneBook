@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using MediatR;
 using Microsoft.Extensions.Logging;
+using PhoneBook.Application.Abstractions.Telemetry;
 using PhoneBook.SharedKernel.Results;
 
 namespace PhoneBook.Application.Abstractions.Behaviors;
@@ -17,9 +18,24 @@ internal sealed class LoggingBehavior<TRequest, TResponse>(ILogger<LoggingBehavi
     {
         var requestName = typeof(TRequest).Name;
         LoggingBehaviorLog.Handling(logger, requestName);
+
+        // One span per MediatR request (feature 002, FR-012). Only the request type and the outcome code are tagged,
+        // never field values (FR-016).
+        using var activity = PhoneBookTelemetry.Application.StartActivity(requestName);
+        activity?.SetTag(PhoneBookTelemetry.RequestTag, requestName);
         var stopwatch = Stopwatch.StartNew();
 
         var response = await next(cancellationToken).ConfigureAwait(false);
+
+        if (response.IsFailure)
+        {
+            activity?.SetTag(PhoneBookTelemetry.ResultTag, response.Error.Code);
+            activity?.SetStatus(ActivityStatusCode.Error, response.Error.Code);
+        }
+        else
+        {
+            activity?.SetTag(PhoneBookTelemetry.ResultTag, "success");
+        }
 
         stopwatch.Stop();
         var elapsed = stopwatch.ElapsedMilliseconds;

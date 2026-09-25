@@ -10,20 +10,21 @@ public sealed class LayerDependencyTests
     public void SharedKernel_DependsOnNoOtherProjectOrFramework() =>
         AssertNoDependency(Types.InAssembly(SharedKernelAssembly),
             DomainNamespace, ApplicationNamespace, InfrastructureNamespace, ApiNamespace,
-            "MediatR", "Microsoft.EntityFrameworkCore", "Microsoft.AspNetCore");
+            "MediatR", "Microsoft.EntityFrameworkCore", "Microsoft.AspNetCore", "OpenTelemetry");
 
     [Fact]
     public void Domain_DependsOnlyOnSharedKernel() =>
         AssertNoDependency(Types.InAssembly(DomainAssembly),
             ApplicationNamespace, InfrastructureNamespace, ApiNamespace,
-            "MediatR", "Microsoft.EntityFrameworkCore", "Microsoft.AspNetCore", "FluentValidation", "Dapper");
+            "MediatR", "Microsoft.EntityFrameworkCore", "Microsoft.AspNetCore", "FluentValidation", "Dapper", "OpenTelemetry");
 
     [Fact]
     public void Application_DoesNotDependOnInfrastructureApiOrProviderDrivers() =>
-        // Dapper and EF Core query operators are allowed on the read side; provider drivers are not.
+        // Dapper and EF Core query operators are allowed on the read side; provider drivers are not. Telemetry uses
+        // BCL System.Diagnostics only; OpenTelemetry itself is wired up by the hosts (feature 002).
         AssertNoDependency(Types.InAssembly(ApplicationAssembly),
             InfrastructureNamespace, ApiNamespace,
-            "Microsoft.AspNetCore", "Npgsql", "Microsoft.Data.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite");
+            "Microsoft.AspNetCore", "Npgsql", "Microsoft.Data.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite", "OpenTelemetry");
 
     [Fact]
     public void Infrastructure_DoesNotDependOnApi() =>
@@ -42,6 +43,11 @@ public sealed class LayerDependencyTests
 
         result.IsSuccessful.ShouldBeTrue(Describe(result));
     }
+
+    [Fact]
+    public void TelemetryNames_LiveInApplicationAbstractions() =>
+        typeof(PhoneBook.Application.Abstractions.Telemetry.PhoneBookTelemetry).Namespace
+            .ShouldBe(ApplicationNamespace + ".Abstractions.Telemetry");
 
     private static void AssertNoDependency(Types types, params string[] forbidden)
     {

@@ -6,4 +6,7 @@ namespace PhoneBook.Application.Abstractions.Data;
 public interface ISqlConnectionFactory
 {
     DbConnection CreateConnection();
+
+    /// <summary>The telemetry <c>db.system</c> name of the configured provider: <c>sqlite</c> or <c>postgresql</c>.</summary>
+    string ProviderName { get; }
 }

@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Globalization;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -8,6 +7,7 @@ using PhoneBook.Api.Infrastructure;
 using PhoneBook.Api.Infrastructure.Auth;
 using PhoneBook.Api.Infrastructure.RateLimiting;
 using PhoneBook.Api.Infrastructure.Swagger;
+using PhoneBook.Api.Infrastructure.Telemetry;
 using PhoneBook.Application;
 using PhoneBook.Infrastructure;
 using Serilog;
@@ -25,7 +25,9 @@ builder.Host.UseSerilog((context, services, logger) => logger
 builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = context =>
 {
     var extensions = context.ProblemDetails.Extensions;
-    extensions.TryAdd("traceId", Activity.Current?.Id ?? context.HttpContext.TraceIdentifier);
+    // Overwrite, not TryAdd: ASP.NET Core pre-fills traceId with the full traceparent; feature 002 (FR-013) needs the
+    // 32-character trace id that telemetry back ends index.
+    extensions["traceId"] = TraceIds.Current(context.HttpContext);
     extensions.TryAdd("errorCode", context.ProblemDetails.Status switch
     {
         StatusCodes.Status401Unauthorized => "Auth.Unauthorized",
@@ -37,6 +39,7 @@ builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = 
     });
 });
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.AddPhoneBookTelemetry();
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
