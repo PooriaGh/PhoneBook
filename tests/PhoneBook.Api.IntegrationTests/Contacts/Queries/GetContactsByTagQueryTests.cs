@@ -3,6 +3,8 @@ using PhoneBook.Application.Contacts.GetByTag;
 
 namespace PhoneBook.Api.IntegrationTests.Contacts.Queries;
 
+// Feature 002 (FR-006): the query now returns a page; expectations and order are unchanged (SC-008).
+
 [Collection(IntegrationTestCollection.Name)]
 public sealed class GetContactsByTagQueryTests(PhoneBookApiFactory factory) : BaseIntegrationTest(factory)
 {
@@ -18,8 +20,9 @@ public sealed class GetContactsByTagQueryTests(PhoneBookApiFactory factory) : Ba
         var result = await Sender.Send(new GetContactsByTagQuery("همکار"), Ct);
 
         result.IsSuccess.ShouldBeTrue();
-        result.Value.Count.ShouldBe(3);
-        result.Value.ShouldAllBe(c => c.Tag == "همکار");
+        result.Value.Items.Count.ShouldBe(3);
+        result.Value.TotalCount.ShouldBe(3);
+        result.Value.Items.ShouldAllBe(c => c.Tag == "همکار");
     }
 
     [Fact]
@@ -29,7 +32,7 @@ public sealed class GetContactsByTagQueryTests(PhoneBookApiFactory factory) : Ba
 
         var result = await Sender.Send(new GetContactsByTagQuery(" work "), Ct);
 
-        result.Value.ShouldHaveSingleItem().Tag.ShouldBe("Work");
+        result.Value.Items.ShouldHaveSingleItem().Tag.ShouldBe("Work");
     }
 
     [Fact]
@@ -40,7 +43,7 @@ public sealed class GetContactsByTagQueryTests(PhoneBookApiFactory factory) : Ba
         var result = await Sender.Send(new GetContactsByTagQuery("همکار"), Ct);
 
         result.IsSuccess.ShouldBeTrue();
-        result.Value.ShouldBeEmpty();
+        result.Value.Items.ShouldBeEmpty();
     }
 
     [Fact]
@@ -51,7 +54,7 @@ public sealed class GetContactsByTagQueryTests(PhoneBookApiFactory factory) : Ba
         var result = await Sender.Send(new GetContactsByTagQuery("دوست"), Ct);
 
         result.IsSuccess.ShouldBeTrue();
-        result.Value.ShouldBeEmpty();
+        result.Value.Items.ShouldBeEmpty();
     }
 
     [Fact]
@@ -65,12 +68,12 @@ public sealed class GetContactsByTagQueryTests(PhoneBookApiFactory factory) : Ba
 
         var result = await Sender.Send(new GetContactsByTagQuery("tag"), Ct);
 
-        var expected = result.Value
+        var expected = result.Value.Items
             .OrderBy(c => c.LastName, StringComparer.Ordinal)
             .ThenBy(c => c.FirstName, StringComparer.Ordinal)
             .Select(c => $"{c.LastName}/{c.FirstName}")
             .ToList();
-        result.Value.Select(c => $"{c.LastName}/{c.FirstName}").ShouldBe(expected);
+        result.Value.Items.Select(c => $"{c.LastName}/{c.FirstName}").ShouldBe(expected);
         expected.ShouldBe(["Smith/John", "smith/Anna", "احمدی/حسن", "احمدی/مریم", "رضایی/علی"]);
     }
 }

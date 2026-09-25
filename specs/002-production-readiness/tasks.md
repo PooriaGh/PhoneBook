@@ -155,9 +155,9 @@ SQLite and on PostgreSQL.
 
 ### Compile-first stubs for User Story 1 (research R-07)
 
-- [ ] T014 [P] [US1] Create `src/PhoneBook.Application/Abstractions/Paging/PagingDefaults.cs`: a static class with `DefaultPage = 1`, `DefaultPageSize = 50` and `MaxPageSize = 200` (data-model §1), and the error codes `PageInvalid = "Paging.Page.Invalid"` and `PageSizeInvalid = "Paging.PageSize.Invalid"`.
-- [ ] T015 [P] [US1] Create `src/PhoneBook.Application/Abstractions/Paging/PagedResponse.cs`: a public `sealed record PagedResponse<T>(IReadOnlyList<T> Items, int Page, int PageSize, int TotalCount)` with a computed `bool HasNext => (long)Page * PageSize < TotalCount`, which uses `long` so a huge page number cannot overflow.
-- [ ] T016 [US1] **Compile-first stub** (research R-07):
+- [X] T014 [P] [US1] Create `src/PhoneBook.Application/Abstractions/Paging/PagingDefaults.cs`: a static class with `DefaultPage = 1`, `DefaultPageSize = 50` and `MaxPageSize = 200` (data-model §1), and the error codes `PageInvalid = "Paging.Page.Invalid"` and `PageSizeInvalid = "Paging.PageSize.Invalid"`.
+- [X] T015 [P] [US1] Create `src/PhoneBook.Application/Abstractions/Paging/PagedResponse.cs`: a public `sealed record PagedResponse<T>(IReadOnlyList<T> Items, int Page, int PageSize, int TotalCount)` with a computed `bool HasNext => (long)Page * PageSize < TotalCount`, which uses `long` so a huge page number cannot overflow.
+- [X] T016 [US1] **Compile-first stub** (research R-07):
   - Change `src/PhoneBook.Application/Contacts/GetByTag/GetContactsByTagQuery.cs` to `GetContactsByTagQuery(string Tag, int Page = PagingDefaults.DefaultPage, int PageSize = PagingDefaults.DefaultPageSize) : IQuery<PagedResponse<ContactResponse>>`.
   - Minimally adapt `GetContactsByTagQueryHandler.cs`: keep the current SQL and in-memory sort, and wrap **all** rows as `new PagedResponse<ContactResponse>(rows, query.Page, query.PageSize, rows.Count)`.
   - In `src/PhoneBook.Api/Endpoints/Contacts/GetContactsByTag.cs`, send the extended query with defaults and change `.Produces<>` to `PagedResponse<ContactResponse>`.
@@ -165,7 +165,7 @@ SQLite and on PostgreSQL.
 
 ### Tests for User Story 1 ⚠️ (write first; they must fail on assertions)
 
-- [ ] T017 [P] [US1] Create `tests/PhoneBook.Api.IntegrationTests/Contacts/Queries/GetContactsByTagPagingTests.cs`. Follow the pattern of the performance tests: an abstract `GetContactsByTagPagingTestsBase(IPhoneBookApiFactory factory)`, with sealed `PostgresGetContactsByTagPagingTests` in `[Collection(IntegrationTestCollection.Name)]` and `SqliteGetContactsByTagPagingTests` in `[Collection(SqliteIntegrationTestCollection.Name)]`. Scenarios, all through HTTP with the paged JSON shape:
+- [X] T017 [P] [US1] Create `tests/PhoneBook.Api.IntegrationTests/Contacts/Queries/GetContactsByTagPagingTests.cs`. Follow the pattern of the performance tests: an abstract `GetContactsByTagPagingTestsBase(IPhoneBookApiFactory factory)`, with sealed `PostgresGetContactsByTagPagingTests` in `[Collection(IntegrationTestCollection.Name)]` and `SqliteGetContactsByTagPagingTests` in `[Collection(SqliteIntegrationTestCollection.Name)]`. Scenarios, all through HTTP with the paged JSON shape:
   - **AC1**: 250 contacts with the tag `همکار`, page 1 with page size 100 → 100 items in order, `totalCount` 250, `page` 1, `pageSize` 100, `hasNext` true
   - **AC2**: page 3 → 50 items, `hasNext` false
   - **AC3**: no paging parameters → 50 items (the default), `page` 1, `pageSize` 50
@@ -174,32 +174,32 @@ SQLite and on PostgreSQL.
   - **SC-002 walk**: fetch every page of 250 at page size 40. Each id appears exactly once, and the concatenated order equals the expected list sorted with `StringComparer.Ordinal` by last name, then first name. Use Persian and Latin names, including names that differ only in `ی` (U+06CC) and `ي` (U+064A).
   - **Tie-break**: 5 contacts with the same first and last name and different phone numbers → ordered by `id` ascending, with the same order on both providers
   - **Large page number**: `page=1000000` with `pageSize=200` → `200` with an empty page. This proves the offset is computed without `int` overflow.
-- [ ] T018 [P] [US1] Add validation tests to `tests/PhoneBook.Api.IntegrationTests/Contacts/Endpoints/GetContactsByTagEndpointTests.cs`:
+- [X] T018 [P] [US1] Add validation tests to `tests/PhoneBook.Api.IntegrationTests/Contacts/Endpoints/GetContactsByTagEndpointTests.cs`:
   - `page=0` → `400` with an `errors.page` entry carrying `Paging.Page.Invalid`
   - `pageSize=0` and `pageSize=201` → `400` with `errors.pageSize` carrying `Paging.PageSize.Invalid`
   - `page=abc`, `page=-1`, `page=99999999999` (overflow) and `pageSize=x` → `400` ProblemDetails with the same per-field codes, never a framework binding error (data-model §1)
   - `page=` and `pageSize=` (empty) → `200` using the defaults (`page` 1, `pageSize` 50)
   - `tag=` (blank) with `page=0` → `400` whose errors hold **both** `tag` (`Tag.Required`) and `page`, in one response
   - each `400` has `errorCode` `General.Validation` and a `traceId`
-- [ ] T019 [US1] Move the existing tag-search tests to the paged shape, after T016, without changing their expected contacts or order (SC-008):
+- [X] T019 [US1] Move the existing tag-search tests to the paged shape, after T016, without changing their expected contacts or order (SC-008):
   - in `tests/PhoneBook.Api.IntegrationTests/Contacts/Endpoints/GetContactsByTagEndpointTests.cs`, deserialize into a local `PagedContacts` record (`Items`, `Page`, `PageSize`, `TotalCount`, `HasNext`) and assert on `Items`
   - in `tests/PhoneBook.Api.IntegrationTests/Contacts/Queries/GetContactsByTagQueryTests.cs`, use `result.Value.Items` and `result.Value.TotalCount`
   - add a comment that references FR-006 as the reason
-- [ ] T020 [US1] Extend `tests/PhoneBook.Api.IntegrationTests/Contacts/Queries/GetContactsByTagPerformanceTests.cs` for SC-001, keeping the existing bulk-insert helper and the per-provider subclasses:
+- [X] T020 [US1] Extend `tests/PhoneBook.Api.IntegrationTests/Contacts/Queries/GetContactsByTagPerformanceTests.cs` for SC-001, keeping the existing bulk-insert helper and the per-provider subclasses:
   - rename the test to `SearchByTag_PageOf100000TaggedContacts_ReturnsUnder500Ms`
   - insert 100,000 rows with the tag `perf`, plus 10,000 rows with other tags, in batches of 5,000 per transaction
   - after one warm-up call, assert that page 1 **and** the last page (page 2000 at page size 50), each measured separately, return in under 500 ms with `TotalCount` 100,000
   - keep `[Trait("Category", "Performance")]`
-- [ ] T021 [P] [US1] Create `tests/PhoneBook.Api.IntegrationTests/Providers/SchemaIndexTests.cs` with a subclass per provider. It asserts that the index `ix_contacts_tag_order` exists and `ix_contacts_normalized_tag` does not:
+- [X] T021 [P] [US1] Create `tests/PhoneBook.Api.IntegrationTests/Providers/SchemaIndexTests.cs` with a subclass per provider. It asserts that the index `ix_contacts_tag_order` exists and `ix_contacts_normalized_tag` does not:
   - SQLite: `SELECT name FROM sqlite_master WHERE type='index'`
   - PostgreSQL: `SELECT indexname FROM pg_indexes WHERE tablename='contacts'`
 
 ### Implementation for User Story 1
 
-- [ ] T022 [US1] Extend `src/PhoneBook.Application/Contacts/GetByTag/GetContactsByTagQueryValidator.cs` with two rules, both collected into the same `ValidationError` as the existing tag rules (feature 001, FR-012):
+- [X] T022 [US1] Extend `src/PhoneBook.Application/Contacts/GetByTag/GetContactsByTagQueryValidator.cs` with two rules, both collected into the same `ValidationError` as the existing tag rules (feature 001, FR-012):
   - `Page`: "≥ 1; default 1", `.WithName("page")`, `.WithErrorCode(PagingDefaults.PageInvalid)`, message "Page must be 1 or greater."
   - `PageSize`: "1–200; default 50", `.WithName("pageSize")`, `.WithErrorCode(PagingDefaults.PageSizeInvalid)`, message "Page size must be between 1 and 200."
-- [ ] T023 [US1] Finish `src/PhoneBook.Application/Contacts/GetByTag/GetContactsByTagQueryHandler.cs`, replacing the T016 stub body (research R-02):
+- [X] T023 [US1] Finish `src/PhoneBook.Application/Contacts/GetByTag/GetContactsByTagQueryHandler.cs`, replacing the T016 stub body (research R-02):
   - Use two parameterised statements on one connection:
     - `SELECT COUNT(*) FROM contacts WHERE normalized_tag = @NormalizedTag`
     - the existing column list plus `ORDER BY last_name, first_name, id LIMIT @Take OFFSET @Skip`
@@ -208,17 +208,17 @@ SQLite and on PostgreSQL.
   - Remove the in-memory `OrderBy(StringComparer.Ordinal)` sort.
   - Update the XML doc to explain that the ordering is byte order on both providers because of the collation (SQLite `BINARY`, PostgreSQL `LC_COLLATE=C`).
   - Read `COUNT(*)` as `long` (PostgreSQL returns `bigint`) and convert it with `checked((int)count)`.
-- [ ] T024 [US1] Update `src/PhoneBook.Infrastructure/Persistence/DatabaseInitializer.cs` `IndexStatements`, keeping `ux_contacts_phone_tag` unchanged:
+- [X] T024 [US1] Update `src/PhoneBook.Infrastructure/Persistence/DatabaseInitializer.cs` `IndexStatements`, keeping `ux_contacts_phone_tag` unchanged:
   - add `DROP INDEX IF EXISTS ix_contacts_normalized_tag`
   - replace the old index with `CREATE INDEX IF NOT EXISTS ix_contacts_tag_order ON contacts (normalized_tag, last_name, first_name, id)`
   - update the class comment to mention the paging index
-- [ ] T025 [US1] Finish `src/PhoneBook.Api/Endpoints/Contacts/GetContactsByTag.cs` (data-model §1, "Parsing query values"):
+- [X] T025 [US1] Finish `src/PhoneBook.Api/Endpoints/Contacts/GetContactsByTag.cs` (data-model §1, "Parsing query values"):
   - bind the query values `page` and `pageSize` as `string?`
   - a missing, empty or whitespace value uses `PagingDefaults`
   - otherwise parse with `int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var n)`. A failure (non-numeric, a sign or overflow) passes `0`, so the validator reports the field's code (T018) and the error contract stays consistent.
   - `.ProducesProblem(StatusCodes.Status400BadRequest)` and `.ProducesProblem(StatusCodes.Status429TooManyRequests)`
   - an XML summary that says "BREAKING (FR-006)"
-- [ ] T026 [US1] Checkpoint. All US1 tests pass on both providers, the rest of the suite stays green, and the build has 0 warnings.
+- [X] T026 [US1] Checkpoint. All US1 tests pass on both providers, the rest of the suite stays green, and the build has 0 warnings.
 
 **Checkpoint**: US1 works and can be shipped on its own (the MVP).
 

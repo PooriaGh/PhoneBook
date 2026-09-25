@@ -32,10 +32,10 @@ public sealed class SqliteProviderSmokeTests(SqliteApiFactory factory) : BaseInt
         var b = await CreateAsync(new ContactRequestData("مریم", "احمدی", "09120000002", "همکار"));
         var c = await CreateAsync(new ContactRequestData("حسن", "احمدی", "09120000003", " همکار "));
 
-        var result = await Client.GetFromJsonAsync<List<ContactResponse>>(
+        var result = await Client.GetFromJsonAsync<PagedContacts>(
             ContactsUri($"?tag={Uri.EscapeDataString("همکار")}"), Ct);
 
-        result.ShouldNotBeNull().Select(r => r.Id).ShouldBe([c.Id, b.Id, a.Id]);
+        result.ShouldNotBeNull().Items.Select(r => r.Id).ShouldBe([c.Id, b.Id, a.Id]);
     }
 
     [Fact]

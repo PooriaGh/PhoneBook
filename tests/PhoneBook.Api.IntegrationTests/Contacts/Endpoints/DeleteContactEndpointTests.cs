@@ -62,8 +62,8 @@ public sealed class DeleteContactEndpointTests(PhoneBookApiFactory factory) : Ba
 
         (await Client.DeleteAsync(ContactsUri($"/{removed.Id.Value}"), Ct)).StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
-        var remaining = await Client.GetFromJsonAsync<List<ContactResponse>>(
+        var remaining = await Client.GetFromJsonAsync<PagedContacts>(
             ContactsUri($"?tag={Uri.EscapeDataString("همکار")}"), Ct);
-        remaining.ShouldNotBeNull().ShouldHaveSingleItem().Id.ShouldBe(kept.Id.Value);
+        remaining.ShouldNotBeNull().Items.ShouldHaveSingleItem().Id.ShouldBe(kept.Id.Value);
     }
 }

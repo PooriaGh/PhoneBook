@@ -91,7 +91,7 @@ public sealed class UpdateContactCommandTests(PhoneBookApiFactory factory) : Bas
 
         await Sender.Send(new UpdateContactCommand(seeded.Id.Value, "Ali", "Rezaei", "09121234567", "دوست", null), Ct);
 
-        (await Sender.Send(new GetContactsByTagQuery("همکار"), Ct)).Value.ShouldBeEmpty();
-        (await Sender.Send(new GetContactsByTagQuery("دوست"), Ct)).Value.ShouldHaveSingleItem().Id.ShouldBe(seeded.Id.Value);
+        (await Sender.Send(new GetContactsByTagQuery("همکار"), Ct)).Value.Items.ShouldBeEmpty();
+        (await Sender.Send(new GetContactsByTagQuery("دوست"), Ct)).Value.Items.ShouldHaveSingleItem().Id.ShouldBe(seeded.Id.Value);
     }
 }
