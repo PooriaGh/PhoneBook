@@ -53,6 +53,49 @@ internal sealed class IdentitySeeder(IServiceProvider serviceProvider, IOptions<
 
             await applicationManager.CreateAsync(descriptor, cancellationToken);
         }
+
+        await SeedSwaggerUiClientAsync(applicationManager, cancellationToken);
+    }
+
+    /// <summary>
+    /// The public first-party client for end-user sign-in (feature 002, data-model §5): no secret, implicit consent,
+    /// authorization-code grant with mandatory PKCE, and the configured redirect URIs only.
+    /// </summary>
+    private async Task SeedSwaggerUiClientAsync(IOpenIddictApplicationManager applicationManager, CancellationToken cancellationToken)
+    {
+        var client = settings.Value.SwaggerUi;
+        if (client.RedirectUris.Count == 0
+            || await applicationManager.FindByClientIdAsync(client.ClientId, cancellationToken) is not null)
+        {
+            return;
+        }
+
+        var descriptor = new OpenIddictApplicationDescriptor
+        {
+            ClientId = client.ClientId,
+            DisplayName = client.DisplayName,
+            ClientType = ClientTypes.Public,
+            ConsentType = ConsentTypes.Implicit,
+            Permissions =
+            {
+                Permissions.Endpoints.Authorization,
+                Permissions.Endpoints.Token,
+                Permissions.GrantTypes.AuthorizationCode,
+                Permissions.ResponseTypes.Code,
+            },
+            Requirements = { Requirements.Features.ProofKeyForCodeExchange },
+        };
+        foreach (var scope in ApiScopes)
+        {
+            descriptor.Permissions.Add(Permissions.Prefixes.Scope + scope);
+        }
+
+        foreach (var redirectUri in client.RedirectUris)
+        {
+            descriptor.RedirectUris.Add(new Uri(redirectUri, UriKind.Absolute));
+        }
+
+        await applicationManager.CreateAsync(descriptor, cancellationToken);
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

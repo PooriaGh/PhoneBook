@@ -66,6 +66,56 @@ public sealed class TokenRateLimitTests : IAsyncLifetime
         }
     }
 
+    [Fact]
+    public async Task Login_OverAllowance_ShowsSignInPageWith429()
+    {
+        using var pkce = new PkceClient(_factory);
+        for (var i = 0; i < RateLimitedIdentityFactory.Limit; i++)
+        {
+            (await pkce.LoginAsync("/", "alice", "wrong-password")).StatusCode.ShouldBe(HttpStatusCode.OK);
+        }
+
+        var response = await pkce.LoginAsync("/", "alice", "wrong-password");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
+        int.Parse(response.Headers.GetValues("Retry-After").Single(), System.Globalization.CultureInfo.InvariantCulture)
+            .ShouldBeGreaterThanOrEqualTo(1);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("text/html");
+        var html = await response.Content.ReadAsStringAsync(Ct);
+        html.ShouldContain("Too many attempts. Try again in");
+        html.ShouldContain("name=\"password\"");
+    }
+
+    [Fact]
+    public async Task TokenAndLogin_ShareOneAllowance()
+    {
+        using var pkce = new PkceClient(_factory);
+        (await RequestValidTokenAsync(pkce.Http)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await RequestValidTokenAsync(pkce.Http)).StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await pkce.LoginAsync("/", "alice", "wrong-password")).StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        (await pkce.LoginAsync("/", "alice", "wrong-password")).StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
+    }
+
+    [Fact]
+    public async Task AfterTheWindow_AccountIsNotLockedOut()
+    {
+        await using var shortWindow = new ConfiguredIdentityFactory(new Dictionary<string, string>
+        {
+            ["RateLimiting:Token:PermitLimit"] = "3",
+            ["RateLimiting:Token:WindowSeconds"] = "2",
+        });
+        using var pkce = new PkceClient(shortWindow);
+        for (var i = 0; i < 4; i++)
+        {
+            await pkce.LoginAsync("/", "alice", "wrong-password");
+        }
+
+        await Task.Delay(TimeSpan.FromSeconds(3), Ct);
+
+        (await pkce.LoginAsync("/", "alice", "alice-dev-password")).StatusCode.ShouldBe(HttpStatusCode.Redirect);
+    }
+
     private static Task<HttpResponseMessage> RequestValidTokenAsync(HttpClient client) =>
         TokenClient.RequestAsync(client, TokenClient.SwaggerClientId, TokenClient.SwaggerClientSecret, "phonebook.read");
 

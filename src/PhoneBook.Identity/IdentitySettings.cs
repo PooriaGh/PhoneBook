@@ -1,3 +1,5 @@
+using PhoneBook.Identity.Users;
+
 namespace PhoneBook.Identity;
 
 /// <summary>Configuration section <c>Identity</c>.</summary>
@@ -17,6 +19,21 @@ public sealed class IdentitySettings
     public IList<string> AllowedCorsOrigins { get; init; } = [];
 
     public IList<IdentityClient> Clients { get; init; } = [];
+
+    /// <summary>End users (feature 002). Loaded only in Development (FR-027); passwords are hashed at start-up.</summary>
+    public IList<IdentityUserOptions> Users { get; init; } = [];
+
+    /// <summary>The public first-party client used by the Swagger UI for the authorization-code flow.</summary>
+    public SwaggerUiClientOptions SwaggerUi { get; init; } = new();
+
+    /// <summary>Authorization-code lifetime (FR-026). Tests shorten it.</summary>
+    public TimeSpan AuthorizationCodeLifetime { get; set; } = TimeSpan.FromMinutes(5);
+
+    /// <summary>Access-token lifetime for every grant (FR-026); equal to the previous default.</summary>
+    public TimeSpan AccessTokenLifetime { get; set; } = TimeSpan.FromHours(1);
+
+    /// <summary>Sign-in session (cookie) lifetime, not sliding (FR-026). Tests shorten it.</summary>
+    public TimeSpan SessionLifetime { get; set; } = TimeSpan.FromMinutes(15);
 }
 
 /// <summary>A confidential client allowed to use the client-credentials grant.</summary>

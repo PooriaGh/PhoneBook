@@ -11,6 +11,9 @@ public class IdentityFactory : WebApplicationFactory<IdentityAssemblyMarker>
     public const string Issuer = "http://localhost/";
     public const string ApiOrigin = "https://localhost:7001";
 
+    /// <summary>A redirect URI registered for the public client in appsettings.Development.json (feature 002).</summary>
+    public const string SwaggerRedirectUri = "https://localhost:7001/swagger/oauth2-redirect.html";
+
     /// <summary>Effectively unlimited by default; rate-limit tests override it.</summary>
     protected virtual int TokenPermitLimit => 1_000_000;
 

@@ -330,7 +330,8 @@ span, the command span and the persistence span. A `404`'s `traceId` equals its 
   - **Filtering processor** (research R-07, analyze P1): keep an activity only when it is an ASP.NET Core server span, has a parent, or comes from `PhoneBook.Application` or `PhoneBook.Persistence`. Other root spans, such as per-row Npgsql inserts from test seeding, are dropped before they are stored.
   - **Log capture** (research R-08): `LogCapture : ILogEventSink` holds rendered messages and property values. It is registered as a singleton `ILogEventSink` in DI, where Serilog's `ReadFrom.Services` picks it up. `AllRecordedText()` includes it.
 
-  Add `TelemetryCapture Capture { get; }` to `.../IPhoneBookApiFactory.cs`, if T028 has not already added it (I2). Attach a capture in `PhoneBookApiFactory` and `SqliteApiFactory` through `ConfigureTestServices`; this is always on and harmless. **No separate PostgreSQL telemetry factory**: PostgreSQL telemetry tests use the `Postgres` collection's shared host, so no second host resets the database while tests run (analyze T2). Tests read only the spans of their own requests (`ForTrace`), because `ActivitySource`s are process-wide.
+  Add `TelemetryCapture Capture { get; }` to `.../IPhoneBookApiFactory.cs`, if T028 has not already added it (I2).
+  *Implementation note (found in US4):* both hosts now call `UseSerilog(..., preserveStaticLogger: true)`, and request logging uses the host's own `Serilog.ILogger`. With the default, every host replaces the global `Log.Logger`, so parallel test hosts wrote into each other's sinks, and log scans could pass without checking anything. Attach a capture in `PhoneBookApiFactory` and `SqliteApiFactory` through `ConfigureTestServices`; this is always on and harmless. **No separate PostgreSQL telemetry factory**: PostgreSQL telemetry tests use the `Postgres` collection's shared host, so no second host resets the database while tests run (analyze T2). Tests read only the spans of their own requests (`ForTrace`), because `ActivitySource`s are process-wide.
 - [X] T039 [P] [US3] Create `tests/PhoneBook.Api.IntegrationTests/Telemetry/TracingTests.cs`: an abstract base, with sealed subclasses in `[Collection(IntegrationTestCollection.Name)]` and `[Collection(SqliteIntegrationTestCollection.Name)]`. Each test reads its trace id from the response `traceId` or from a `traceparent` header it sends, then asserts on `Capture.ForTrace(id)`:
   - **AC1**: `POST /api/v1/contacts` → spans in one trace:
     - a server span with the templated `http.route`
@@ -357,6 +358,7 @@ span, the command span and the persistence span. A `404`'s `traceId` equals its 
   - **Unreachable exporter**: a fresh SQLite factory whose `ConfigureTestServices` adds `AddOtlpExporter(o => o.Endpoint = new Uri("http://127.0.0.1:9"))` to both providers → 50 mixed requests all return their normal status, and no single request takes 1 s or more. This proves export never blocks.
   - **Default configuration** (empty `Telemetry:OtlpEndpoint`) → requests succeed.
   - The 5% comparison in SC-005 is measured manually (quickstart #13, T080). No latency ratio is asserted in CI (analyze A1).
+  - *Implementation note:* one untimed warm-up request, then a 2 s per-request bound. The 1 s bound flaked once under full-suite load, and a blocking export would take about 10 s (the connect timeout).
 - [X] T043 [P] [US3] Create `tests/PhoneBook.Api.IntegrationTests/Telemetry/OutgoingCallTracingTests.cs`, for the phone book service's half of FR-012 as clarified (research R-04):
   - Start a parent span with `using var parent = PhoneBookTelemetry.Application.StartActivity("test.outgoing")`. This source is already recorded by the host's tracer (U1).
   - Inside it, create a client from the SQLite host's `IHttpClientFactory`, using the default socket primary handler so .NET's HTTP diagnostics run, and `GET http://127.0.0.1:9/.well-known/openid-configuration`. The connection is refused.
@@ -448,7 +450,7 @@ code, then exchange it for a token. `alice`'s token creates a contact on the API
 
 ### Tests for User Story 4 ⚠️ (write first; they must fail)
 
-- [ ] T057 [P] [US4] Create `tests/PhoneBook.Identity.IntegrationTests/Infrastructure/PkceClient.cs`. It uses `factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true })` and provides:
+- [X] T057 [P] [US4] Create `tests/PhoneBook.Identity.IntegrationTests/Infrastructure/PkceClient.cs`. It uses `factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true })` and provides:
   - `CreatePkcePair()`: a 43-character random `code_verifier`, and `code_challenge = Base64Url(SHA256(verifier))`
   - `BuildAuthorizeUri(client, redirectUri, scope, challenge, method = "S256", state)`
   - `LoginAsync(returnUrl, user, password)`: GETs the form, extracts the hidden `__RequestVerificationToken` with a regex, and POSTs the form
@@ -456,10 +458,10 @@ code, then exchange it for a token. `alice`'s token creates a contact on the API
   - `RedeemAsync(code, verifier, redirectUri)`: posts `grant_type=authorization_code` to `/connect/token`
 
   In `.../Infrastructure/IdentityFactory.cs`, add the constant `SwaggerRedirectUri = "https://localhost:7001/swagger/oauth2-redirect.html"`. The Development environment loads the seeded users (T068).
-- [ ] T058 [P] [US4] Create `tests/PhoneBook.Identity.IntegrationTests/AuthorizationCodeFlowTests.cs`, following the contract tables (`contracts/identity-signin.md`):
+- [X] T058 [P] [US4] Create `tests/PhoneBook.Identity.IntegrationTests/AuthorizationCodeFlowTests.cs`, following the contract tables (`contracts/identity-signin.md`):
   - **Discovery**: advertises `authorization_endpoint`, `authorization_code` in `grant_types_supported` and `code` in `response_types_supported`. `code_challenge_methods_supported` is **exactly** `["S256"]` (FR-018).
   - **Anonymous authorize** → `302` to `/account/login?ReturnUrl=…`.
-  - **Happy path, alice** (AC1): the token response has `token_type` Bearer and `expires_in` 3600 (FR-026). The JWT has:
+  - **Happy path, alice** (AC1): the token response has `token_type` Bearer and `expires_in` 3600 (FR-026; observed as seconds remaining, so asserted within 3590–3600). The JWT has:
     - `sub` = alice's stable GUID
     - `name`
     - `aud` = `phonebook-api`
@@ -468,14 +470,16 @@ code, then exchange it for a token. `alice`'s token creates a contact on the API
   - **Down-scoping** (FR-020): bob requesting both scopes → the token scope is only `phonebook.read`.
   - **Access denied** (FR-020): bob requesting `phonebook.write` only, or a request with no `scope` → `302` to `redirect_uri?error=access_denied&state=…`.
   - **PKCE** (AC2, FR-018): a missing `code_challenge`, or `code_challenge_method=plain` → `302` to `redirect_uri?error=invalid_request`.
+    *Implementation note:* OpenIddict validates PKCE before the redirect URI and renders `400 invalid_request` itself (no redirect, no code). The test and contract record the observed behaviour.
   - **Token errors** (FR-019):
     - a wrong `code_verifier` → `400 invalid_grant`
     - a missing `code_verifier` → `400 invalid_grant` (CHK015). If OpenIddict returns a different code, record it and correct the contract row, as in feature 001.
+      *Implementation note:* observed `invalid_request` ("The mandatory 'code_verifier' parameter is missing."). The contract was corrected.
     - a second redemption of the same code → `400 invalid_grant`. **Also**, the first access token's store entry (resolved through `IOpenIddictTokenManager` from the JWT's `oi_tkn_id` claim) now has status `revoked`.
   - **Expired code** (FR-026): with `Identity:AuthorizationCodeLifetime=00:00:02` set on the factory, wait 3 s, then redeem → `400 invalid_grant`.
   - **Session expires mid-sign-in** (spec edge case; FR-026; analyze C1): with `Identity:SessionLifetime=00:00:02`, sign in, wait 3 s, then call authorize again with the same cookie → `302` to `/account/login`, and no code is issued.
   - **Return addresses** (FR-024): an unknown `client_id`, or a `redirect_uri` that differs from a registered one even only by a trailing `/` → a `400` from the Identity host, with no `Location` pointing to the requested address.
-- [ ] T059 [P] [US4] Create `tests/PhoneBook.Identity.IntegrationTests/AccountLoginTests.cs`:
+- [X] T059 [P] [US4] Create `tests/PhoneBook.Identity.IntegrationTests/AccountLoginTests.cs`:
   - `GET /account/login` → `200` HTML with `username`, `password`, a hidden `ReturnUrl` and `__RequestVerificationToken`, plus `Cache-Control: no-store`. The root element has `lang="en"` and `dir="ltr"`, and each input has a matching `<label for=…>` (spec Clarifications).
   - **AC3 / FR-021**:
     - a wrong password for `alice` and an unknown user `nobody` both return `200` with "Invalid username or password." and no authentication cookie
@@ -485,31 +489,32 @@ code, then exchange it for a token. `alice`'s token creates a contact on the API
   - **Open redirects** (FR-024): `ReturnUrl=https://evil.example/x`, `//evil.example` and `/\evil.example` → after a valid login, a redirect to `/`, never to the external host.
   - **AC6**: `GET /account/register` and `POST /account/register` → `404`. No sign-out endpoint exists either (`/account/logout` → `404`, out of scope).
   - **Cookie** (FR-025, FR-026), with an `https://localhost` client: `HttpOnly`, `SameSite=Lax` and `Secure` are set, and `Expires` is 15 minutes (±1 min) from now.
-- [ ] T060 [US4] Extend `tests/PhoneBook.Identity.IntegrationTests/TokenRateLimitTests.cs` (T030), using a fresh `RateLimitedIdentityFactory` (limit 3):
+    *Implementation note:* the cookie is a browser-session cookie with no `Expires`. The 15-minute limit is enforced server-side in the authentication ticket, which the session-expiry test in T058 proves. The test asserts that any `Expires` present is ≤ 16 min.
+- [X] T060 [US4] Extend `tests/PhoneBook.Identity.IntegrationTests/TokenRateLimitTests.cs` (T030), using a fresh `RateLimitedIdentityFactory` (limit 3):
   - **Brute-force protection** (constitution v1.0.2, VI; FR-008): 3 × `POST /account/login` with wrong credentials. The 4th → `429`, `Retry-After` ≥ 1, `Content-Type: text/html`, and a body containing the sign-in form and "Too many attempts. Try again in" (FR-009). It is never JSON.
   - **Shared allowance** (FR-008): 2 token requests plus 1 login POST use up the allowance, so the next login POST gets `429`.
   - **No lockout** (FR-008): after the window resets, `alice` signs in successfully.
-- [ ] T061 [P] [US4] Create `tests/PhoneBook.Identity.IntegrationTests/SeededUsersEnvironmentTests.cs` (FR-027):
+- [X] T061 [P] [US4] Create `tests/PhoneBook.Identity.IntegrationTests/SeededUsersEnvironmentTests.cs` (FR-027):
   - Use a factory subclass with `builder.UseEnvironment("Production")`, `Identity:Users:0:*` set to `alice` with a plain-text password, and plain-HTTP settings as needed for `/account/login`.
   - Signing in as `alice` fails with the generic message: no users are loaded outside Development.
   - A warning log entry says configured users were ignored, and it does not contain the user name or password (use the Identity project's `LogCapture` from T044).
-- [ ] T062 [US4] Extend `tests/PhoneBook.Identity.IntegrationTests/EndToEndTokenToApiTests.cs`:
+- [X] T062 [US4] Extend `tests/PhoneBook.Identity.IntegrationTests/EndToEndTokenToApiTests.cs`:
   - **AC1 / AC4 / FR-020**: `alice`'s code-flow token → `POST /api/v1/contacts` gets `201` and `GET ?tag=` gets `200` with the paged body
   - `bob`'s token → POST gets `403` with `errorCode` `Auth.Forbidden`, and GET gets `200`
   - **AC5 / FR-023**: the existing client-credentials tests stay unchanged and green
-- [ ] T063 [P] [US4] Create `tests/PhoneBook.Api.IntegrationTests/Infrastructure/SwaggerDocumentTests.cs` (SQLite collection):
+- [X] T063 [P] [US4] Create `tests/PhoneBook.Api.IntegrationTests/Infrastructure/SwaggerDocumentTests.cs` (SQLite collection):
   - `GET /swagger/v1/swagger.json` has an `oauth2` scheme with both `clientCredentials` and `authorizationCode` flows
   - `authorizationUrl` ends with `/connect/authorize` and `tokenUrl` ends with `/connect/token`
   - the ContactPage-shaped response schema is present for `GetContactsByTag`
 
 ### Implementation for User Story 4
 
-- [ ] T064 [P] [US4] Extend `src/PhoneBook.Identity/IdentitySettings.cs`:
+- [X] T064 [P] [US4] Extend `src/PhoneBook.Identity/IdentitySettings.cs`:
   - `IList<IdentityUserOptions> Users` (new file `src/PhoneBook.Identity/Users/IdentityUserOptions.cs`: `UserName`, `Password`, `DisplayName`, `IList<string> Scopes`)
   - `SwaggerUiClientOptions SwaggerUi` (new file `src/PhoneBook.Identity/Users/SwaggerUiClientOptions.cs`: `ClientId = "phonebook-swagger-ui"`, `DisplayName`, `IList<string> RedirectUris`)
   - `TimeSpan AuthorizationCodeLifetime = TimeSpan.FromMinutes(5)`, `TimeSpan AccessTokenLifetime = TimeSpan.FromHours(1)` and `TimeSpan SessionLifetime = TimeSpan.FromMinutes(15)` (FR-026). Tests override them, so they are applied through options at runtime (T067).
-- [ ] T065 [P] [US4] Create `src/PhoneBook.Identity/Users/IdentityUser.cs`, a sealed record in namespace `PhoneBook.Identity.Users` with the fields from data-model §5: `Guid Id`, `string UserName`, `string PasswordHash`, `string DisplayName`, `IReadOnlyList<string> Scopes`. Also create `src/PhoneBook.Identity/Users/StableUserId.cs`, which builds a name-based RFC 4122 v5 GUID (SHA-1) from `UserName.ToUpperInvariant()` using a fixed namespace GUID constant. `Id` becomes the `sub` claim.
-- [ ] T066 [US4] Create `src/PhoneBook.Identity/Users/InMemoryUserStore.cs`, a singleton:
+- [X] T065 [P] [US4] Create `src/PhoneBook.Identity/Users/IdentityUser.cs`, a sealed record in namespace `PhoneBook.Identity.Users` with the fields from data-model §5: `Guid Id`, `string UserName`, `string PasswordHash`, `string DisplayName`, `IReadOnlyList<string> Scopes`. Also create `src/PhoneBook.Identity/Users/StableUserId.cs`, which builds a name-based RFC 4122 v5 GUID (SHA-1) from `UserName.ToUpperInvariant()` using a fixed namespace GUID constant. `Id` becomes the `sub` claim.
+- [X] T066 [US4] Create `src/PhoneBook.Identity/Users/InMemoryUserStore.cs`, a singleton:
   - On first use (a lazy, thread-safe build from `IOptions<IdentitySettings>` and `IHostEnvironment`), it hashes every configured password with `PasswordHasher<IdentityUser>.HashPassword` (PBKDF2, HMAC-SHA512, 100,000 iterations; research R-08) and keeps only the hashes. Plain text is never stored.
   - **Outside Development** (FR-027): it loads **no** users. If any are configured, it logs one warning ("Configured users ignored outside Development") with no user names.
   - **`IdentityUser? ValidateCredentials(string userName, string password)`**:
@@ -518,7 +523,7 @@ code, then exchange it for a token. `alice`'s token creates a contact on the API
     - it returns `null` on any failure and never throws
   - **`IdentityUser? FindById(Guid id)`**.
   - Register it in `Program.cs`.
-- [ ] T067 [US4] Update `src/PhoneBook.Identity/Program.cs`:
+- [X] T067 [US4] Update `src/PhoneBook.Identity/Program.cs`:
   - **Cookie authentication** (FR-025, FR-026): `AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(o => { o.LoginPath = "/account/login"; o.Cookie.HttpOnly = true; o.Cookie.SameSite = SameSiteMode.Lax; o.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest; o.SlidingExpiration = false; })`. Set `ExpireTimeSpan` from `IdentitySettings.SessionLifetime` through `AddOptions<CookieAuthenticationOptions>(CookieAuthenticationDefaults.AuthenticationScheme).Configure<IOptions<IdentitySettings>>(...)`, so tests can shorten it (analyze C1).
   - `AddAntiforgery()`
   - **OpenIddict server**:
@@ -532,14 +537,14 @@ code, then exchange it for a token. `alice`'s token creates a contact on the API
   - **Middleware**: `app.UseAntiforgery()` after `UseAuthorization()`
   - **Endpoints**: map `MapAccountEndpoints()` and `MapAuthorizeEndpoint()`
   - **Unchanged**: client credentials, apart from the explicit 1 h token lifetime, which equals the previous default
-- [ ] T068 [P] [US4] In `src/PhoneBook.Identity/appsettings.Development.json`:
+- [X] T068 [P] [US4] In `src/PhoneBook.Identity/appsettings.Development.json`:
   - add `Identity:Users`:
     - `alice` / `alice-dev-password` / "Alice (DEV-ONLY)" / both scopes
     - `bob` / `bob-dev-password` / "Bob (DEV-ONLY)" / `phonebook.read`
   - add `Identity:SwaggerUi:RedirectUris`: `https://localhost:7001/swagger/oauth2-redirect.html`, `http://localhost:7001/swagger/oauth2-redirect.html` and `http://localhost:7003/swagger/oauth2-redirect.html`
   - mark every plain-text password DEV-ONLY
   - leave `Users` empty in `src/PhoneBook.Identity/appsettings.json`, so production has no seeded users
-- [ ] T069 [US4] Create `src/PhoneBook.Identity/Endpoints/LoginPage.cs` and `src/PhoneBook.Identity/Endpoints/AccountEndpoints.cs`:
+- [X] T069 [US4] Create `src/PhoneBook.Identity/Endpoints/LoginPage.cs` and `src/PhoneBook.Identity/Endpoints/AccountEndpoints.cs`:
   - **`LoginPage.Render(HttpContext, string? returnUrl, string? message)`** returns the HTML string for a minimal **English, left-to-right** page (`<html lang="en" dir="ltr">`, spec Clarifications) with a form of `<label>`-ed `username` and `password` fields, a hidden `ReturnUrl` and the antiforgery token from `IAntiforgery.GetAndStoreTokens`. Every dynamic value is `HtmlEncoder`-encoded. It is shared with the rate-limit page (T070).
   - **`MapAccountEndpoints(this IEndpointRouteBuilder)`**:
     - **`GET /account/login?ReturnUrl=`** returns `LoginPage.Render` with `Content-Type: text/html; charset=utf-8` and `Cache-Control: no-store`.
@@ -551,8 +556,8 @@ code, then exchange it for a token. `alice`'s token creates a contact on the API
       - `.RequireRateLimiting(TokenRateLimitOptions.TokenPolicy)`
   - Log only the outcome, never the user name or password (FR-016).
   - There is no registration or sign-out endpoint (AC6; sign-out is out of scope).
-- [ ] T070 [US4] Extend `src/PhoneBook.Identity/RateLimiting/RateLimitingSetup.cs` `OnRejected` (FR-009, research R-08): when the rejected endpoint is `POST /account/login`, write status `429` and `Retry-After`, with `text/html` from `LoginPage.Render(context, returnUrl from the form, "Too many attempts. Try again in {n} seconds.")`. Every other endpoint keeps the OAuth JSON body. Add no try/catch.
-- [ ] T071 [US4] Create `src/PhoneBook.Identity/Endpoints/AuthorizeEndpoint.cs` with `MapAuthorizeEndpoint()`, mapping `GET` and `POST` `connect/authorize`:
+- [X] T070 [US4] Extend `src/PhoneBook.Identity/RateLimiting/RateLimitingSetup.cs` `OnRejected` (FR-009, research R-08): when the rejected endpoint is `POST /account/login`, write status `429` and `Retry-After`, with `text/html` from `LoginPage.Render(context, returnUrl from the form, "Too many attempts. Try again in {n} seconds.")`. Every other endpoint keeps the OAuth JSON body. Add no try/catch.
+- [X] T071 [US4] Create `src/PhoneBook.Identity/Endpoints/AuthorizeEndpoint.cs` with `MapAuthorizeEndpoint()`, mapping `GET` and `POST` `connect/authorize`:
   - Get the request with `context.GetOpenIddictServerRequest()`. OpenIddict has already rejected unknown clients, non-exact `redirect_uri`s and missing or plain PKCE (FR-018, FR-024).
   - Authenticate the cookie scheme. If it fails, or the `sub` user is no longer in `InMemoryUserStore`, return `Results.Challenge(new AuthenticationProperties { RedirectUri = Request.PathBase + Request.Path + QueryString.Create(Request.HasFormContentType ? Request.Form : Request.Query) }, [Cookie])`.
   - Otherwise build a `ClaimsIdentity` with the OpenIddict authentication type and the claims `sub` (user id) and `name` (display name). Set their destinations to the access token.
@@ -560,25 +565,25 @@ code, then exchange it for a token. `alice`'s token creates a contact on the API
   - Call `SetResources(settings.Audience)`.
   - Return `Results.SignIn(principal, authenticationScheme: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme)`.
   - There is no consent screen, because the client's consent type is Implicit.
-- [ ] T072 [US4] Extend `src/PhoneBook.Identity/Endpoints/TokenEndpoint.cs` with an `IsAuthorizationCodeGrantType()` branch:
+- [X] T072 [US4] Extend `src/PhoneBook.Identity/Endpoints/TokenEndpoint.cs` with an `IsAuthorizationCodeGrantType()` branch:
   - authenticate with `OpenIddictServerAspNetCoreDefaults.AuthenticationScheme` to recover the principal stored in the code
   - if its `sub` user no longer exists, return `Forbid` with `invalid_grant`
   - otherwise sign the principal in again
   - leave the client-credentials branch byte-for-byte unchanged (FR-023)
   - OpenIddict itself enforces PKCE verification and single-use codes (FR-019)
-- [ ] T073 [US4] Extend `src/PhoneBook.Identity/Seeding/IdentitySeeder.cs` to create the public client from `settings.Value.SwaggerUi` idempotently:
+- [X] T073 [US4] Extend `src/PhoneBook.Identity/Seeding/IdentitySeeder.cs` to create the public client from `settings.Value.SwaggerUi` idempotently:
   - `ClientType = ClientTypes.Public`, with no secret
   - `ConsentType = ConsentTypes.Implicit`
   - `Permissions`: `Endpoints.Authorization`, `Endpoints.Token`, `GrantTypes.AuthorizationCode`, `ResponseTypes.Code`, `Scope` + `phonebook.read`, and `Scope` + `phonebook.write`
   - `Requirements.Features.ProofKeyForCodeExchange`
   - every configured `RedirectUris` entry
   - skip it when no redirect URIs are configured
-- [ ] T074 [US4] Update `src/PhoneBook.Api/Infrastructure/Swagger/SwaggerSetup.cs`:
+- [X] T074 [US4] Update `src/PhoneBook.Api/Infrastructure/Swagger/SwaggerSetup.cs`:
   - add `AuthorizationCode = new OpenApiOAuthFlow { AuthorizationUrl = {PublicAuthority}/connect/authorize, TokenUrl = {PublicAuthority}/connect/token, Scopes = read and write }` next to `ClientCredentials`
   - update the scheme description to mention both flows
   - in the UI options, add `options.OAuthUsePkce()` and change `OAuthClientId` to `phonebook-swagger-ui`, the flow with no secret
   - add a comment saying that client-credentials users now type `phonebook-swagger` and its secret, and record this in the README (T078)
-- [ ] T075 [US4] Checkpoint. All US4 tests pass, all feature-001 Identity tests stay green (FR-023), and the build has 0 warnings.
+- [X] T075 [US4] Checkpoint. All US4 tests pass, all feature-001 Identity tests stay green (FR-023), and the build has 0 warnings.
 
 **Checkpoint**: All four user stories work on their own.
 

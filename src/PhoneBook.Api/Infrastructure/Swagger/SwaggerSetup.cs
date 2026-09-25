@@ -18,33 +18,39 @@ internal static class SwaggerSetup
             {
                 Title = "PhoneBook API",
                 Version = "v1",
-                Description = "Phone book resource API. Obtain a token from PhoneBook.Identity (client credentials).",
+                Description = "Phone book resource API. Obtain a token from PhoneBook.Identity: client credentials for "
+                    + "applications, or authorization code + PKCE for people (feature 002).",
             });
 
             options.OperationFilter<AuthorizeOperationFilter>();
         });
 
-        // The token URL comes from AuthOptions at runtime (Auth:PublicAuthority, finding U5).
+        // The authority URLs come from AuthOptions at runtime (Auth:PublicAuthority, finding U5).
         services.AddOptions<SwaggerGenOptions>()
             .Configure<IOptions<AuthOptions>>((options, auth) =>
+            {
+                var authority = auth.Value.EffectivePublicAuthority.TrimEnd('/');
                 options.AddSecurityDefinition(SchemeName, new OpenApiSecurityScheme
                 {
                     Type = SecuritySchemeType.OAuth2,
-                    Description = "OAuth 2.0 client credentials issued by PhoneBook.Identity.",
+                    Description = "OAuth 2.0 issued by PhoneBook.Identity: client credentials (applications) or "
+                        + "authorization code with PKCE (people, feature 002).",
                     Flows = new OpenApiOAuthFlows
                     {
                         ClientCredentials = new OpenApiOAuthFlow
                         {
-                            TokenUrl = new Uri(
-                                $"{auth.Value.EffectivePublicAuthority.TrimEnd('/')}/connect/token", UriKind.Absolute),
-                            Scopes = new Dictionary<string, string>
-                            {
-                                [Scopes.Read] = "Read contacts",
-                                [Scopes.Write] = "Create, update and delete contacts",
-                            },
+                            TokenUrl = new Uri($"{authority}/connect/token", UriKind.Absolute),
+                            Scopes = ApiScopes(),
+                        },
+                        AuthorizationCode = new OpenApiOAuthFlow
+                        {
+                            AuthorizationUrl = new Uri($"{authority}/connect/authorize", UriKind.Absolute),
+                            TokenUrl = new Uri($"{authority}/connect/token", UriKind.Absolute),
+                            Scopes = ApiScopes(),
                         },
                     },
-                }));
+                });
+            });
 
         return services;
     }
@@ -55,11 +61,20 @@ internal static class SwaggerSetup
         app.UseSwaggerUI(options =>
         {
             options.SwaggerEndpoint("/swagger/v1/swagger.json", "PhoneBook API v1");
-            options.OAuthClientId("phonebook-swagger");
+            // Swagger UI pre-fills one client id for every flow, so it is the secret-less public client used for
+            // end-user sign-in (feature 002). For client credentials, type "phonebook-swagger" and its secret.
+            options.OAuthClientId("phonebook-swagger-ui");
+            options.OAuthUsePkce();
             options.OAuthScopes(Scopes.Read, Scopes.Write);
         });
         return app;
     }
+
+    private static Dictionary<string, string> ApiScopes() => new()
+    {
+        [Scopes.Read] = "Read contacts",
+        [Scopes.Write] = "Create, update and delete contacts",
+    };
 
     /// <summary>Adds the OAuth2 requirement only to operations that carry authorization metadata.</summary>
     private sealed class AuthorizeOperationFilter : IOperationFilter

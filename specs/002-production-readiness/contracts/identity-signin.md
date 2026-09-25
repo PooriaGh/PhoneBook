@@ -27,7 +27,7 @@ The client-credentials behaviour there is unchanged (FR-023).
 |---|---|
 | Not signed in | `302` → `/account/login?ReturnUrl=<authorize URL>` |
 | Signed in | `302` → `redirect_uri?code=…&state=…`; consent is implicit for this first-party client |
-| Missing `code_challenge`, or `code_challenge_method=plain` | `302` → `redirect_uri?error=invalid_request…` (PKCE with S256 is required) |
+| Missing `code_challenge`, or `code_challenge_method=plain` | `400` `invalid_request` rendered by the Identity host; no redirect and no code. *Observed OpenIddict behaviour (implementation, 2026-09-25): PKCE parameters are validated before the redirect URI, so the error is not redirected.* |
 | No requested scope is held by the user, or `scope` is absent | `302` → `redirect_uri?error=access_denied&state=…` (FR-020) |
 | Unknown `client_id`, or a `redirect_uri` that is not an **exact** match for a registered one | `400` `invalid_request` rendered by the Identity host itself; **never** redirects (FR-024) |
 
@@ -64,7 +64,7 @@ asking for write access receives read only.
 | Case | Result |
 |---|---|
 | Valid code and verifier | `200` `{access_token, token_type: "Bearer", expires_in, scope}`. The JWT has `sub` = user id, `name`, `aud` = `phonebook-api` and the granted `scope` |
-| Missing `code_verifier` | `400` `invalid_grant`. The test records the observed code, and this row is corrected if it differs (CHK015) |
+| Missing `code_verifier` | `400` `invalid_request` ("The mandatory 'code_verifier' parameter is missing."). *Observed and recorded during implementation (CHK015).* |
 | Mismatched `code_verifier` | `400` `invalid_grant` |
 | Code already redeemed | `400` `invalid_grant`, **and** the tokens issued from that code are revoked (FR-019) |
 | Code older than 5 minutes | `400` `invalid_grant` (FR-026) |

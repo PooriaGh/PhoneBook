@@ -36,7 +36,7 @@ The new suites for paging, rate limiting, telemetry and end-user sign-in pass on
 | 15 | Sign in as `bob` and POST a contact | `403` (US4-4) |
 | 16 | Sign in with a wrong password | "Invalid username or password." (US4 AC3) |
 | 17 | Submit the sign-in form 11 times quickly with wrong passwords | the 11th shows the sign-in page with "Too many attempts. Try again in N seconds." (FR-009) |
-| 18 | Edit the authorize URL to `code_challenge_method=plain`, or change `redirect_uri` to another address | refused; never redirected to the edited address (FR-018, FR-024) |
+| 18 | Edit the authorize URL to `code_challenge_method=plain`, or change `redirect_uri` to another address | `400 invalid_request` shown by the Identity host; never redirected to the edited address (FR-018, FR-024) |
 | 19 | As `bob`, authorize with `scope=phonebook.write` only | the application receives `error=access_denied` (FR-020) |
 | 20 | After a successful sign-in, check the cookie in the browser developer tools | `HttpOnly`, `SameSite=Lax`, about 15 minutes' lifetime (FR-025, FR-026) |
 

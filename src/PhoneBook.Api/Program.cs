@@ -14,11 +14,15 @@ using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Host.UseSerilog((context, services, logger) => logger
-    .ReadFrom.Configuration(context.Configuration)
-    .ReadFrom.Services(services)
-    .Enrich.FromLogContext()
-    .WriteTo.Console(formatProvider: CultureInfo.InvariantCulture));
+// preserveStaticLogger: each host keeps its own logger instead of replacing the global Log.Logger, so hosts that
+// share a process (integration tests) never write into each other's sinks (feature 002, FR-016 log scans).
+builder.Host.UseSerilog(
+    (context, services, logger) => logger
+        .ReadFrom.Configuration(context.Configuration)
+        .ReadFrom.Services(services)
+        .Enrich.FromLogContext()
+        .WriteTo.Console(formatProvider: CultureInfo.InvariantCulture),
+    preserveStaticLogger: true);
 
 // Constitution Principle III: every error response from this host is ProblemDetails with errorCode + traceId.
 // /health/* and the Identity host's OAuth endpoints are exempt (research R-17).
@@ -66,7 +70,8 @@ var app = builder.Build();
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
-app.UseSerilogRequestLogging();
+// The host's own Serilog logger (see preserveStaticLogger above), not the static Log.Logger.
+app.UseSerilogRequestLogging(options => options.Logger = app.Services.GetRequiredService<Serilog.ILogger>());
 
 // Rate limiting sits between authentication (so the sub claim picks the partition) and authorization (so an
 // over-limit caller gets 429 even when it would otherwise get 401/403). Feature 002, research R-03.

@@ -66,6 +66,31 @@ public sealed class EndToEndTokenToApiTests(IdentityFactory identity) : IAsyncLi
     }
 
     [Fact]
+    public async Task EndUserAlice_CodeFlowToken_CanCreateAndSearch()
+    {
+        using var client = await ApiClientForEndUserAsync("alice", "alice-dev-password");
+
+        (await client.PostAsJsonAsync(ContactsUri, NewContact(), Ct)).StatusCode.ShouldBe(HttpStatusCode.Created);
+
+        var search = await client.GetAsync(new Uri($"{ContactsUri}?tag=work", UriKind.Relative), Ct);
+        search.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var page = await search.Content.ReadFromJsonAsync<JsonElement>(Ct);
+        page.GetProperty("totalCount").GetInt32().ShouldBeGreaterThanOrEqualTo(1);
+        page.GetProperty("items").GetArrayLength().ShouldBeGreaterThanOrEqualTo(1);
+    }
+
+    [Fact]
+    public async Task EndUserBob_CodeFlowToken_CannotWriteButCanRead()
+    {
+        using var client = await ApiClientForEndUserAsync("bob", "bob-dev-password");
+
+        var post = await client.PostAsJsonAsync(ContactsUri, NewContact(), Ct);
+        await AssertProblemAsync(post, HttpStatusCode.Forbidden, "Auth.Forbidden");
+
+        (await client.GetAsync(new Uri($"{ContactsUri}?tag=work", UriKind.Relative), Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+    }
+
+    [Fact]
     public async Task NoToken_Returns401ProblemWithWwwAuthenticate()
     {
         using var client = _api.CreateClient();
@@ -92,6 +117,15 @@ public sealed class EndToEndTokenToApiTests(IdentityFactory identity) : IAsyncLi
     {
         using var identityClient = identity.CreateClient();
         var token = await TokenClient.GetAccessTokenAsync(identityClient, clientId, secret, scope);
+        var client = _api.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return client;
+    }
+
+    private async Task<HttpClient> ApiClientForEndUserAsync(string userName, string password)
+    {
+        using var pkce = new PkceClient(identity);
+        var token = await pkce.GetAccessTokenAsync(userName, password);
         var client = _api.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return client;

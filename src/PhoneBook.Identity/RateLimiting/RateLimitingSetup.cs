@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
+using PhoneBook.Identity.Endpoints;
 using PhoneBook.Identity.Telemetry;
 
 namespace PhoneBook.Identity.RateLimiting;
@@ -49,10 +50,23 @@ internal static class RateLimitingSetup
     private static async ValueTask OnRejectedAsync(OnRejectedContext context, CancellationToken cancellationToken)
     {
         var httpContext = context.HttpContext;
-        httpContext.Response.Headers.RetryAfter = RetryAfterSeconds(context.Lease).ToString(CultureInfo.InvariantCulture);
+        var retryAfter = RetryAfterSeconds(context.Lease);
+        httpContext.Response.Headers.RetryAfter = retryAfter.ToString(CultureInfo.InvariantCulture);
 
         httpContext.RequestServices.GetRequiredService<IdentityMetrics>().RateLimitRejections.Add(
             1, new KeyValuePair<string, object?>(IdentityMetrics.PolicyTag, TokenRateLimitOptions.TokenPolicy));
+
+        // A person on the sign-in form gets the page again, never a machine-readable error (FR-009).
+        if (httpContext.Request.Path.StartsWithSegments("/account/login", StringComparison.OrdinalIgnoreCase))
+        {
+            var returnUrl = httpContext.Request.HasFormContentType
+                ? AccountEndpoints.SafeReturnUrl((await httpContext.Request.ReadFormAsync(cancellationToken).ConfigureAwait(false))["ReturnUrl"])
+                : "/";
+            var page = LoginPage.Render(httpContext, returnUrl, $"Too many attempts. Try again in {retryAfter} seconds.");
+            httpContext.Response.ContentType = "text/html; charset=utf-8";
+            await httpContext.Response.WriteAsync(page, cancellationToken).ConfigureAwait(false);
+            return;
+        }
 
         // RFC 6749 defines no token-endpoint error for throttling; temporarily_unavailable is the closest standard code
         // and is documented as an extension in the identity contract (research R-08). HTTP 429 + Retry-After carry the

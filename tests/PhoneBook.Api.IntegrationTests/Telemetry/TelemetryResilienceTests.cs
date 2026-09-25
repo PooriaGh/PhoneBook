@@ -45,6 +45,9 @@ public sealed class TelemetryResilienceTests
     {
         using (client)
         {
+            // Untimed warm-up (JIT, first connection), so only steady-state requests are measured.
+            (await client.GetAsync(ContactsUri("?tag=resilience"), Ct)).StatusCode.ShouldBe(HttpStatusCode.OK);
+
             for (var i = 0; i < 25; i++)
             {
                 var create = await TimedAsync(() => client.PostAsJsonAsync(ContactsUri(), ContactFaker.Request(tag: "resilience"), Ct));
@@ -60,7 +63,9 @@ public sealed class TelemetryResilienceTests
     {
         var stopwatch = Stopwatch.StartNew();
         var response = await send();
-        stopwatch.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(1), "a request must never wait on telemetry export");
+        // A blocking export would hold a request for the exporter's connect timeout (10 s); 2 s leaves room for a
+        // loaded CI machine while still catching blocking.
+        stopwatch.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(2), "a request must never wait on telemetry export");
         return response;
     }
 }
