@@ -1,0 +1,91 @@
+# Delta to specs/001-phonebook-management/contracts/phonebook-api.openapi.yaml for feature 002.
+# Only the changed or added parts are shown here; everything else in the 001 contract still applies.
+openapi: 3.0.4
+info:
+  title: PhoneBook API (feature 002 changes)
+  version: "1.1"   # document revision; the API version in the route stays v1 (CHK019)
+  description: >
+    BREAKING (spec FR-006): GET /api/v1/contacts?tag= now returns a paged object instead of a plain array.
+    All rate-limited routes may now answer 429 (see x-rate-limited-operations).
+    429 takes precedence over 401 and 403 when a caller is over its allowance (FR-007).
+    The error traceId changed from the full W3C traceparent (feature 001) to the 32-hex trace id (FR-013).
+    Paging consistency: each page reflects the data when that page is requested. If contacts change between
+    requests, a contact may appear on two pages or be skipped.
+paths:
+  /api/v1/contacts:
+    get:
+      operationId: GetContactsByTag
+      summary: Page through contacts carrying a tag (Dapper, byte-order ordering)
+      parameters:
+        - { name: tag, in: query, required: true, schema: { type: string, maxLength: 50 } }
+        # page and pageSize: absent or empty uses the default; non-numeric or out of range gives 400 with the field's code.
+        - { name: page, in: query, required: false, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        "200":
+          description: One page (possibly empty) plus paging information.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ContactPage" }
+              example:
+                items: [ { id: "0193...", firstName: "مریم", lastName: "احمدی", phoneNumber: "09121234567", tag: "همکار", version: 1 } ]
+                page: 1
+                pageSize: 50
+                totalCount: 250
+                hasNext: true
+        "400":
+          description: Validation (tag, page, pageSize). Errors are keyed by field; errorCode is General.Validation.
+          content:
+            application/problem+json:
+              example:
+                title: One or more validation errors occurred.
+                status: 400
+                errorCode: General.Validation
+                traceId: 4bf92f3577b34da6a3ce929d0e0e4736
+                errors:
+                  page: [ { code: Paging.Page.Invalid, message: Page must be 1 or greater. } ]
+                  pageSize: [ { code: Paging.PageSize.Invalid, message: Page size must be between 1 and 200. } ]
+        "401": { description: Unauthorized }
+        "403": { description: Forbidden }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+# Every operation on /api/v1 may answer 429 with the TooManyRequests response below (CHK028):
+x-rate-limited-operations: [ CreateContact, GetContactById, UpdateContact, DeleteContact, GetContactsByTag ]
+components:
+  securitySchemes:
+    oauth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://localhost:7002/connect/token
+          scopes: { phonebook.read: Read contacts, phonebook.write: Write contacts }
+        authorizationCode:           # NEW: end users, PKCE required, public client phonebook-swagger-ui
+          authorizationUrl: https://localhost:7002/connect/authorize
+          tokenUrl: https://localhost:7002/connect/token
+          scopes: { phonebook.read: Read contacts, phonebook.write: Write contacts }
+  schemas:
+    ContactPage:
+      type: object
+      required: [items, page, pageSize, totalCount, hasNext]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ContactResponse" } }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 200 }
+        totalCount: { type: integer, minimum: 0 }
+        hasNext: { type: boolean }
+    ContactResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        lastName: { type: string }
+        phoneNumber: { type: string }
+        tag: { type: string }
+        version: { type: integer }
+  responses:
+    TooManyRequests:
+      description: Rate limit exceeded (policy "api", per sub claim or remote IP).
+      headers:
+        Retry-After: { schema: { type: integer, minimum: 1 }, description: "Whole seconds until the window resets (rounded up, at least 1). No other rate-limit headers are sent." }
+      content:
+        application/problem+json:
+          example: { type: "https://tools.ietf.org/html/rfc6585#section-4", title: "Too many requests", status: 429, errorCode: "RateLimit.Exceeded", traceId: "4bf92f3577b34da6a3ce929d0e0e4736" }

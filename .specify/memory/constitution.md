@@ -1,26 +1,33 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.0.0 → 1.0.1
-Bump rationale: PATCH. This is a clarification only. Principle III was ambiguous about which responses
-"from the API" must be ProblemDetails (/speckit-analyze finding A3). The amendment states the scope
-already used by the design (research R-17). No principle was added, removed or redefined, and no
-existing obligation was weakened for business routes.
+Version change: 1.0.1 → 1.0.2
+Bump rationale: PATCH. This amendment resolves /speckit-analyze findings C1 and X1 for feature 002. No
+principle is added, removed or redefined:
+  - C1: the commit-attribution rule changes form, not intent. AI assistance is still disclosed, now
+    in the README cover letter (already required by Principle VII) instead of a per-commit trailer.
+    This follows the project owner's standing instruction not to add Co-Authored-By trailers.
+  - X1: Principle VI states explicitly that the identity application's OAuth protocol and sign-in
+    endpoints are anonymous by design. The design already assumed this (feature 001 /connect/token;
+    feature 002 /connect/authorize and /account/login). No obligation on business endpoints is weakened.
 
 Modified principles:
-  III. Two Safety Nets for Unexpected Failures: the error-contract bullet now names its scope
-       (business routes and framework statuses on the API host) and its exemptions (health checks,
-       OAuth protocol endpoints).
+  VI. Secure by Default: the anonymous-access bullet names the identity application's protocol and
+      sign-in endpoints, and requires rate limiting on credential-accepting endpoints.
+Modified sections:
+  Development Workflow & Quality Gates, item 6 (Commits): the Co-Authored-By trailer requirement is
+  replaced by README disclosure of AI assistance, and trailers are not added.
 Added sections: none
 Removed sections: none
 
 Dependent artifacts (read at runtime, NOT modified by this command):
   ✅ .specify/templates/*: no conflict
-  ✅ specs/001-phonebook-management/research.md: R-17 already matches this wording. Its
-     "follow-up: PATCH amendment" note is now fulfilled.
-  ✅ specs/001-phonebook-management/plan.md: the Principle III row already cites R-17
-  ✅ specs/001-phonebook-management/tasks.md (rev. 4): T056/T058 and the end-to-end test already
-     implement this scope
+  ✅ specs/001-phonebook-management/*: commits already had no trailer, and the README already
+     discloses AI and SDD
+  ✅ specs/002-production-readiness/plan.md: the Principle VI row already lists the login and
+     authorize endpoints as the only new anonymous endpoints
+  ✅ specs/002-production-readiness/tasks.md: the Notes line "without a Co-Authored-By trailer" now
+     complies. T034 and T066 already rate-limit the token and login endpoints.
 
 Deferred TODOs: none
 -->
@@ -122,8 +129,12 @@ SQL, mapping and concurrency defects that unit tests cannot.
 
 ### VI. Secure by Default
 
-- Every business endpoint MUST require an authorization policy. Anonymous access is limited to
-  health checks and API documentation.
+- Every business endpoint MUST require an authorization policy. Anonymous access is limited to:
+  - health checks and API documentation
+  - the identity application's OAuth 2.0 / OpenID Connect protocol endpoints (for example token,
+    authorize and discovery) and its sign-in pages, which are anonymous by design
+- Endpoints that accept credentials MUST be rate-limited per source address. These are the token
+  endpoint and the sign-in form.
 - Tokens MUST be issued by the separate identity application built with OpenIddict and validated
   by the API. Scopes MUST distinguish read access from write access.
 - Secrets MUST NOT be committed except clearly marked development-only client secrets. Production
@@ -186,8 +197,9 @@ traceable spec-to-code flow is itself part of what is being demonstrated.
    - the full solution builds and passes all tests in Release
    - the quickstart scenarios are validated manually
    - the README cover letter is complete
-6. **Commits**: Small commits focused on single tasks. AI-assisted commits carry a
-   `Co-Authored-By` trailer.
+6. **Commits**: Small commits focused on single tasks. AI assistance is disclosed in the README
+   cover letter (Principle VII), not in commit trailers. Commits MUST NOT carry a
+   `Co-Authored-By` trailer for the AI assistant (project owner's decision).
 
 ## Governance
 
@@ -202,4 +214,4 @@ traceable spec-to-code flow is itself part of what is being demonstrated.
 - **Compliance**: Every plan runs the Constitution Check. Every `/speckit-analyze` run treats a
   constitution violation as CRITICAL. Reviews verify Principles II, V and VI explicitly.
 
-**Version**: 1.0.1 | **Ratified**: 2026-09-25 | **Last Amended**: 2026-09-25
+**Version**: 1.0.2 | **Ratified**: 2026-09-25 | **Last Amended**: 2026-09-25
