@@ -591,9 +591,9 @@ code, then exchange it for a token. `alice`'s token creates a contact on the API
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T076 [P] Add a header comment to `specs/001-phonebook-management/contracts/phonebook-api.openapi.yaml` saying that `GET /api/v1/contacts` is superseded by `specs/002-production-readiness/contracts/phonebook-api-changes.openapi.yaml` (BREAKING, FR-006) and that 429 applies to all business routes (constitution VII: specs are the source of truth).
-- [ ] T077 [P] Check `specs/002-production-readiness/contracts/identity-signin.md` and `contracts/phonebook-api-changes.openapi.yaml` against the observed behaviour (the error codes from T058, the `Retry-After` format and the flow URLs), and correct any drift.
-- [ ] T078 Update the documentation:
+- [X] T076 [P] Add a header comment to `specs/001-phonebook-management/contracts/phonebook-api.openapi.yaml` saying that `GET /api/v1/contacts` is superseded by `specs/002-production-readiness/contracts/phonebook-api-changes.openapi.yaml` (BREAKING, FR-006) and that 429 applies to all business routes (constitution VII: specs are the source of truth).
+- [X] T077 [P] Check `specs/002-production-readiness/contracts/identity-signin.md` and `contracts/phonebook-api-changes.openapi.yaml` against the observed behaviour (the error codes from T058, the `Retry-After` format and the flow URLs), and correct any drift.
+- [X] T078 Update the documentation:
   - **`README.md`**, a "Feature 002" section:
     - paging, with the **BREAKING** v1 response change, showing the tag-search JSON **before and after** side by side (FR-006)
     - the paging caveat: pages reflect the data when each is requested (E1)
@@ -608,17 +608,18 @@ code, then exchange it for a token. `alice`'s token creates a contact on the API
     - the updated test counts
   - **`docker-compose.yml`**: update the header comment about Swagger Authorize for the client-id change (I2).
   - **`specs/001-phonebook-management/quickstart.md`**: add a one-line note that feature 002 changed the pre-filled Swagger client id (I2).
-- [ ] T079 [P] Constitution audit, recording the results in the PR or commit message:
+- [X] T079 [P] Constitution audit, recording the results in the PR or commit message:
   - `grep -rn "catch" src --include=*.cs` still shows only the four allowed sites (Principle II)
   - every `429` and `400` from the API is ProblemDetails with `errorCode` (Principle III)
   - no provider-specific SQL or `COLLATE` in `src/PhoneBook.Application` (Principle IV)
   - every plain-text credential is marked DEV-ONLY (Principle VI)
 - [ ] T080 Run [quickstart.md](./quickstart.md) §1 (automated) and walk through the manual scenarios 1–20 in §2, including a compose run with `--profile observability`:
+  - *Status (2026-09-25):* §1 automated is done (219/219, Release, 0 warnings). The manual scenarios 1–20 are **pending**: they need the compose stack and a person signing in through Swagger UI in a browser.
   - **#11**: the API's discovery and JWKS calls to Identity appear in the same trace as the Identity server spans (FR-012).
   - **#13**: the median latency, with and without the dashboard container, is within 5% (SC-005).
 
   Record the results in the quickstart, as was done for feature 001.
-- [ ] T081 Final checkpoint. `dotnet build PhoneBook.slnx -c Release` gives 0 warnings, and `dotnet test --solution PhoneBook.slnx -c Release` is all green on both providers. Confirm that CI (`.github/workflows/ci.yml`) needs no change, beyond checking that the Docker-based PostgreSQL tests still run with `--locale=C`. Push only when the user asks.
+- [X] T081 Final checkpoint. `dotnet build PhoneBook.slnx -c Release` gives 0 warnings, and `dotnet test --solution PhoneBook.slnx -c Release` is all green on both providers. Confirm that CI (`.github/workflows/ci.yml`) needs no change, beyond checking that the Docker-based PostgreSQL tests still run with `--locale=C`. Push only when the user asks.
 
 ---
 

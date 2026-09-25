@@ -49,6 +49,7 @@ dotnet run --project src/PhoneBook.Api --launch-profile https
 
 1. Open `https://localhost:7001/swagger`.
 2. Click **Authorize**, select both scopes, and use client `phonebook-swagger` with the dev secret from `src/PhoneBook.Identity/appsettings.Development.json`.
+   *Note (feature 002):* Swagger UI now pre-fills `phonebook-swagger-ui` for the new sign-in flow, so for client credentials type `phonebook-swagger` yourself.
 3. Walk through the scenarios below and check each result.
 
 | # | Action | Expected (spec ref) |

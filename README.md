@@ -2,21 +2,26 @@
 
 [![CI](https://github.com/PooriaGh/PhoneBook/actions/workflows/ci.yml/badge.svg)](https://github.com/PooriaGh/PhoneBook/actions/workflows/ci.yml)
 ![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)
-![Tests](https://img.shields.io/badge/tests-132%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-219%20passing-brightgreen)
 
 > **Cover letter** for the backend developer assignment of **Hasin Group (گروه حصین)**.
 > This README explains the architecture, the technology choices, how to run and test the solution, and the
 > development process (spec-driven development with AI assistance).
 
-**Status: complete.** All 130 tasks are done and `/speckit-converge` reports the code converged with the spec,
-plan, tasks and constitution. Verification:
+**Status.** Two features, each specified, planned, analysed and implemented with Spec Kit:
+
+| Feature | What it delivers | State |
+|---|---|---|
+| [001 Phone book management](specs/001-phonebook-management/spec.md) | the brief: add, edit, find by tag, delete | complete and converged (130/130 tasks) |
+| [002 Production readiness](specs/002-production-readiness/spec.md) | paging, rate limiting, OpenTelemetry, end-user sign-in (authorization code + PKCE) | implemented (see §14); the manual quickstart walk-through is still pending |
 
 | Check | Result |
 |---|---|
-| Automated tests (Release, 0 build warnings) | **132 / 132** passing, locally and on GitHub Actions |
-| Quickstart scenarios against both hosts over HTTPS | **17 / 17** |
-| Docker Compose smoke test (in-memory SQLite and PostgreSQL profiles) | **14 / 14** |
-| Swagger UI "Authorize" walkthrough in a browser | done |
+| Automated tests (Release, 0 build warnings) | **219 / 219** passing (feature 001: 132 on GitHub Actions) |
+| Feature 001 quickstart against both hosts over HTTPS | **17 / 17** |
+| Feature 001 Docker Compose smoke test (SQLite and PostgreSQL profiles) | **14 / 14** |
+| Swagger UI "Authorize" walkthrough in a browser (feature 001) | done |
+| Feature 002 quickstart scenarios 1–20 (compose + browser) | pending: needs a person to sign in (§14.6) |
 
 ---
 
@@ -48,13 +53,14 @@ process honestly, including the problems it caught before any code was written.
 |---|---|---|
 | Add an entry (name, surname, phone, tag) | `POST /api/v1/contacts` → `201` + `Location` + `ETag` | US1, FR-001…FR-005, FR-018 |
 | Edit an entry | `PUT /api/v1/contacts/{id}` (optional `If-Match`) → `200` | US3, FR-006, FR-007, FR-017 |
-| Get all entries with a tag | `GET /api/v1/contacts?tag=…` → `200 [...]` | US2, FR-008, FR-009 |
+| Get all entries with a tag | `GET /api/v1/contacts?tag=…&page=&pageSize=` → `200 { items, page, pageSize, totalCount, hasNext }` (paged since feature 002) | US2, FR-008, FR-009; 002 FR-001…FR-006 |
 | Delete an entry | `DELETE /api/v1/contacts/{id}` (optional `If-Match`) → `204` | US4, FR-010, FR-011 |
 | (support) Read one entry | `GET /api/v1/contacts/{id}` → `200` + `ETag` | used by `Location` |
 | DDD | `Contact` aggregate, value objects, domain events, domain service | §4 |
 | In-memory storage | in-memory SQLite (default provider) | §7 |
 | RESTful + Swagger | versioned routes, ProblemDetails, OAuth-enabled Swagger UI | §6, §8 |
 | Tests | unit + integration + architecture + load/perf | §10 |
+| (feature 002) production readiness | paging, rate limiting, OpenTelemetry, sign-in for people | §14 |
 | Cover letter | this README | |
 
 The full specification (user stories, acceptance scenarios, edge cases) is in
@@ -81,9 +87,11 @@ flowchart LR
     App --> Dom
     Dom --> SK
     subgraph Identity host
-        Id[PhoneBook.Identity<br/>OpenIddict authorization server<br/>client credentials]
+        Id[PhoneBook.Identity<br/>OpenIddict authorization server<br/>client credentials + code/PKCE sign-in]
     end
     Api -. "validates JWTs (discovery + JWKS)" .-> Id
+    Api -. "OTLP traces + metrics" .-> Dash[Aspire dashboard<br/>compose profile observability]
+    Id -. "OTLP" .-> Dash
 ```
 
 **The command path** (for example, `POST /contacts`):
@@ -116,8 +124,8 @@ sequenceDiagram
 | `PhoneBook.Domain` | `Contact` aggregate, `ContactId`/`PersonName`/`PhoneNumber`/`Tag` value objects, events, `ContactDuplicateChecker` |
 | `PhoneBook.Application` | Commands, queries, handlers, validators, pipeline behaviours, domain-event handlers |
 | `PhoneBook.Infrastructure` | `WriteDbContext` (UoW), `ReadDbContext`, Dapper connection factory, repositories, provider switch |
-| `PhoneBook.Api` | Endpoints (`IEndpoint` discovery), error mapping, ETags, auth policies, Swagger |
-| `PhoneBook.Identity` | Separate OpenIddict server: token endpoint, seeding, CORS for Swagger |
+| `PhoneBook.Api` | Endpoints (`IEndpoint` discovery), error mapping, ETags, auth policies, Swagger, rate limiting, OpenTelemetry |
+| `PhoneBook.Identity` | Separate OpenIddict server: token and authorization endpoints, sign-in page, seeding, CORS for Swagger, rate limiting, OpenTelemetry |
 
 ---
 
@@ -154,9 +162,11 @@ domain-owned port (`IContactUniquenessReader`). A unique index backs it up in ca
 | Commit | `UnitOfWorkBehavior` after a successful handler | never; `ReadDbContext.SaveChanges` is a logged no-op |
 
 Both read technologies are used on purpose. EF no-tracking projections cover simple lookups, and hand-written
-parameterised SQL through Dapper serves the hot tag search. The SQL is portable (no `ORDER BY`): SQLite and
-PostgreSQL collate Persian text differently, so results are sorted in memory by character code, which
-makes the order identical on both providers.
+parameterised SQL through Dapper serves the hot tag search. Since feature 002 the tag search is **paged in SQL**
+(`COUNT` + `ORDER BY last_name, first_name, id LIMIT/OFFSET`). The SQL stays identical on both providers; the
+same byte-order (Unicode code point) sort comes from **collation**: SQLite's default `BINARY`, and PostgreSQL
+created with `LC_COLLATE=C` (a deployment requirement, §7). Feature 001 sorted in memory instead, which does not
+scale to paging.
 
 ---
 
@@ -172,7 +182,8 @@ makes the order identical on both providers.
 * **Safety net 2:** `GlobalExceptionHandler` (`IExceptionHandler`) turns anything else into a `500`
   ProblemDetails. Exception details appear only in Development.
 * **Every API error is RFC 9457 ProblemDetails** with `errorCode` and `traceId`, including `401`/`403`/`404`/`405`
-  raised by the framework and real OpenIddict challenges.
+  raised by the framework and real OpenIddict challenges. Since feature 002 the `traceId` is the 32-character
+  W3C trace id, so an operator can look up the exact trace of any error.
 
 | `ErrorType` | HTTP | Example `errorCode` |
 |---|---|---|
@@ -182,6 +193,7 @@ makes the order identical on both providers.
 | PreconditionFailed | 412 | `Contact.VersionMismatch` (stale `If-Match`) |
 | Unexpected | 500 | `General.Unexpected` |
 | (framework) | 401 / 403 | `Auth.Unauthorized` / `Auth.Forbidden` |
+| (rate limiter, feature 002) | 429 | `RateLimit.Exceeded`, with `Retry-After` |
 
 **Concurrency:** `version` is an EF concurrency token and is exposed as an `ETag`. `PUT`/`DELETE` accept `If-Match`
 (a mismatch returns `412`), and a lost race returns `409`. Tests fire 10 simultaneous `PUT`s and 20 identical
@@ -201,7 +213,12 @@ work, and it cannot be reset by Respawn or run in Testcontainers. The solution u
 | `Postgres` | integration tests (Testcontainers + Respawn), optional compose profile | same schema, same SQL |
 
 The schema is created with `EnsureCreated()` (migrations make no sense for a database that disappears on
-restart). The two indexes (`ix_contacts_normalized_tag`, unique `ux_contacts_phone_tag`) are portable SQL.
+restart). The indexes (`ix_contacts_tag_order (normalized_tag, last_name, first_name, id)` for paging, and the
+unique `ux_contacts_phone_tag`) are portable SQL.
+
+**Deployment requirement (feature 002):** a PostgreSQL database must be created with **`LC_COLLATE=C`**
+(`POSTGRES_INITDB_ARGS=--locale=C --encoding=UTF8`), so SQL paging sorts exactly like SQLite. The test container and
+the compose `postgres` service do this, and a test guards it.
 
 ---
 
@@ -209,13 +226,17 @@ restart). The two indexes (`ix_contacts_normalized_tag`, unique `ux_contacts_pho
 
 * `PhoneBook.Identity` is a **separate host** running **OpenIddict 7** with EF Core stores in its own
   in-memory SQLite database.
-* It uses the **OAuth 2.0 client-credentials** grant (the API is machine-to-machine; there are no end users in the spec).
+* It uses the **OAuth 2.0 client-credentials** grant for applications and, since feature 002, the
+  **authorization code + PKCE** flow for people (§14.4).
 * **Scopes:** `phonebook.read` (GET) and `phonebook.write` (POST/PUT/DELETE), enforced by the API policies
   `Contacts.Read` and `Contacts.Write`. The audience is `phonebook-api`.
 * The issuer is fixed by configuration (`Identity:Issuer`). The API validates signed JWTs using the discovery
   document and JWKS.
 * A CORS policy allows the Swagger UI (on the API origin) to call `/connect/token`.
-* The malformed-id fallback route also requires authentication. Only `/health/*` and `/swagger` are anonymous.
+* The malformed-id fallback route also requires authentication. Only `/health/*` and `/swagger` are anonymous on
+  the API; on the Identity host, the OAuth endpoints and the sign-in page are anonymous by design (constitution
+  v1.0.2).
+* Credential-accepting endpoints (`/connect/token`, the sign-in form) are rate-limited per address (§14.2).
 
 **Development clients (DEV-ONLY credentials, in `src/PhoneBook.Identity/appsettings.Development.json`):**
 
@@ -224,8 +245,11 @@ restart). The two indexes (`ix_contacts_normalized_tag`, unique `ux_contacts_pho
 | `phonebook-swagger` | `phonebook-swagger-dev-secret` | read, write |
 | `phonebook-readonly` | `phonebook-readonly-dev-secret` | read (demonstrates `403`) |
 
+**Development end users (DEV-ONLY, same file, feature 002):** `alice` / `alice-dev-password` (read and write) and
+`bob` / `bob-dev-password` (read). They exist only in the Development environment.
+
 **Production notes:** use X.509 signing and encryption certificates instead of ephemeral keys, store secrets in
-a vault, persist the OpenIddict store, and add authorization code + PKCE if end users are ever introduced.
+a vault, persist the OpenIddict store, and replace the configuration-seeded users with real user management.
 
 ---
 
@@ -240,27 +264,31 @@ a vault, persist the OpenIddict store, and add authorization code + PKCE if end 
 | EF Core 10 (SQLite, Npgsql) + EFCore.NamingConventions | write model and read models, snake_case schema, complex properties for value objects |
 | Dapper | hand-written read-side SQL |
 | OpenIddict 7 | standards-based OAuth 2.0 server and token validation (Apache 2.0) |
-| Swashbuckle | Swagger UI with the OAuth2 client-credentials flow |
+| Swashbuckle | Swagger UI with the OAuth2 client-credentials and authorization-code (PKCE) flows |
 | Serilog | structured logging and request logging; hot paths use `[LoggerMessage]` source generation |
 | xUnit v3 + Microsoft.Testing.Platform | test framework and runner (required by the .NET 10 SDK) |
 | **Shouldly** | assertions. Chosen over FluentAssertions 8+, which is commercially licensed |
 | NSubstitute, Bogus | a test double for the domain-service port; Persian-locale fake data |
 | Testcontainers.PostgreSql + Respawn | a real PostgreSQL per test run, reset between tests |
 | NetArchTest.Rules | enforces the layer dependency rules |
+| **OpenTelemetry 1.19** (stable only) + `Npgsql.OpenTelemetry` | traces and metrics, OTLP export (feature 002); the beta EF Core instrumentation is deliberately avoided |
+| ASP.NET Core rate limiter, cookie auth, antiforgery, `PasswordHasher` | shared-framework building blocks for feature 002, so no extra packages |
+| `Microsoft.Extensions.Diagnostics.Testing` | `MetricCollector<T>` bound to one host's `IMeterFactory`, so metric tests are exact in parallel runs |
+| .NET Aspire dashboard (container, 13.5) | local OTLP receiver showing traces and metrics (compose profile `observability`) |
 
 ---
 
 ## 10. Testing strategy
 
 **Result of the final run** (`dotnet build -c Release` with 0 warnings; `dotnet test --solution PhoneBook.slnx -c Release`):
-**132 tests, 132 passed, 0 failed.**
+**219 tests, 219 passed, 0 failed** (feature 001: 132).
 
 | Project | Tests |
 |---|---|
 | Domain unit tests | 45 |
-| API integration tests (PostgreSQL + in-memory SQLite) | 67 |
-| Identity integration tests (incl. end-to-end) | 12 |
-| Architecture tests | 8 |
+| API integration tests (PostgreSQL + in-memory SQLite) | 115 |
+| Identity integration tests (incl. end-to-end and sign-in) | 50 |
+| Architecture tests | 9 |
 
 | Project | Kind | What it proves |
 |---|---|---|
@@ -273,7 +301,8 @@ a vault, persist the OpenIddict store, and add authorization code + PKCE if end 
   counts as red) before the implementation.
 * **Both providers:** a SQLite smoke suite, a mixed-load test and a performance test run against the default
   in-memory SQLite database as well as PostgreSQL.
-* **SC-004 performance:** a tag search over 10,000 contacts takes under 1 second on both providers.
+* **Performance:** feature 002 SC-001, **one page of a tag with 100,000 contacts in under 500 ms** on both
+  providers, for the first page and the deepest page (it replaced feature 001's 10,000-contact check).
 * **SC-005 consistency:** 100 concurrent create/update/delete/search requests produce no `5xx`, the expected
   row count, every updated row at `version == 2`, and no duplicates.
 * **End-to-end design note:** the end-to-end test gives the API the Identity host's real issuer and signing
@@ -309,8 +338,11 @@ dotnet run --project src/PhoneBook.Identity --launch-profile https   # https://l
 dotnet run --project src/PhoneBook.Api --launch-profile https        # https://localhost:7001/swagger
 ```
 
-1. Open `https://localhost:7001/swagger`, click **Authorize**, and use client `phonebook-swagger` /
-   `phonebook-swagger-dev-secret` with both scopes.
+1. Open `https://localhost:7001/swagger` and click **Authorize**. Either:
+   - **authorizationCode** (people, feature 002): the client id is pre-filled as `phonebook-swagger-ui`; sign in as
+     `alice` / `alice-dev-password` (or `bob` for read-only), or
+   - **clientCredentials** (applications): type client `phonebook-swagger` and secret `phonebook-swagger-dev-secret`
+     (no longer pre-filled, because Swagger UI pre-fills one client id for every flow).
 2. Try the endpoints. The full validation walkthrough (17 scenarios) is in
    [`specs/001-phonebook-management/quickstart.md`](specs/001-phonebook-management/quickstart.md).
 
@@ -331,6 +363,7 @@ locally over HTTPS, with real tokens from the Identity host: **17/17 passed**.
 ```bash
 docker compose up --build                       # API http://localhost:7001/swagger, Identity http://localhost:7002
 docker compose --profile postgres up --build    # adds an API on PostgreSQL at http://localhost:7003
+docker compose --profile observability up --build   # adds the Aspire dashboard at http://localhost:18888 (feature 002)
 ```
 
 **Compose smoke test (T126): 14/14 checks passed** on both profiles:
@@ -397,6 +430,31 @@ The work followed the Spec Kit flow. Each step produced a reviewable artefact in
 | T126 | the Docker Compose stack had never been run | built and smoke-tested on both profiles (14/14) |
 | T129 | the in-browser Swagger "Authorize" flow had not been verified (it needs the dev client secret entered by hand) | walked through in the browser |
 
+### Feature 002: what the process caught
+
+Feature 002 went through the same flow, plus a requirements-quality checklist (`/speckit-checklist`) for security
+and the API contract, and `/speckit-clarify`. Three `/speckit-analyze` rounds and the checklist changed the design
+**before** implementation:
+
+| Finding | What was wrong | Fix |
+|---|---|---|
+| C1 (critical) | the constitution demanded a `Co-Authored-By` commit trailer the project owner does not use | constitution **v1.0.2**: AI assistance is disclosed here instead |
+| T1 / T2 | rate-limit tests would share counters; PostgreSQL telemetry tests would reset a database under running tests | a fresh host per rate-limit test; telemetry tests in the PostgreSQL collection |
+| M1 | a static `Meter` mixes counts from parallel test hosts | per-host meters through `IMeterFactory`, tests via `MetricCollector` |
+| P1 | capturing every span would keep ~110,000 seeding spans in memory | a filtering capture processor |
+| R-03 | a rate limiter after `UseAuthentication` never counts wrong client secrets, because OpenIddict answers inside authentication | the Identity limiter runs before authentication, and a test proves wrong secrets are counted |
+| checklist | 38 requirement-quality questions (sign-in lifetimes, replay, open redirects, cookie flags, timing, rate-limit responses for people, personal data in logs) | spec FR-004 to FR-027 refined, research R-08 |
+
+Found **during** implementation and recorded in the specs:
+
+* ASP.NET Core pre-fills `traceId` with the full `traceparent`, so the old `TryAdd` never took effect: now overwritten.
+* With the default `UseSerilog`, every host replaces the global `Log.Logger`, so parallel test hosts logged into
+  each other's sinks and a log scan could pass vacuously: both hosts now use `preserveStaticLogger: true`.
+* The audit handlers logged tag values, which FR-016 forbids: they now log the contact id only.
+* OpenIddict renders missing or `plain` PKCE as `400 invalid_request` (not a redirect) and a missing
+  `code_verifier` as `invalid_request`: the contract was corrected to the observed behaviour.
+* A 2-second fixed rate-limit window could reset mid-burst in tests: windows are 60 s except in the Retry-After test.
+
 ### AI-assisted engineering (Claude Code)
 
 * **What the AI drafted:** the spec from the Persian brief, the research options, the task breakdown, and first
@@ -429,5 +487,89 @@ The work followed the Spec Kit flow. Each step produced a reviewable artefact in
   give fully independent read scaling.
 * **Persistent database + migrations:** switch `Database:Provider` to `Postgres` and replace `EnsureCreated`
   with EF migrations.
-* **Pagination** for large tag results, **rate limiting**, **OpenTelemetry** traces and metrics, and
-  **authorization code + PKCE** once end users exist.
+* **Distributed rate limiting:** counters live in each instance's memory; several instances would need a shared
+  store (for example Redis).
+* **Keyset paging:** page numbers are simple, but a contact can appear twice or be skipped if data changes between
+  page requests. Keyset (continuation-token) paging avoids that and is faster for very deep pages.
+* **A production telemetry back end** instead of the local Aspire dashboard, with retention and alerting.
+* **Real user management:** users come from configuration only; there is no registration, recovery, MFA or
+  **sign-out** (sessions and tokens simply expire), and no per-account lockout (the per-address limit covers it).
+* **`RateLimit-*` response headers** (still an IETF draft); only `Retry-After` is sent today.
+
+---
+
+## 14. Feature 002: production readiness
+
+The four items that §13 listed as future work for feature 001, delivered as
+[`specs/002-production-readiness`](specs/002-production-readiness/spec.md) (27 functional requirements, 8 success
+criteria, 81 tasks).
+
+### 14.1 Paging (US1). BREAKING change to v1
+
+The tag search returns a page instead of the full list. This replaces the v1 response **in place** (the owner's
+decision, recorded in FR-006), so existing callers must read `items`:
+
+```jsonc
+// before (feature 001)                       // after (feature 002)
+[                                             {
+  { "id": "…", "firstName": "مریم", … }         "items": [ { "id": "…", "firstName": "مریم", … } ],
+]                                               "page": 1, "pageSize": 50, "totalCount": 250, "hasNext": true
+                                              }
+```
+
+* `page` ≥ 1 (default 1), `pageSize` 1–200 (default 50). Empty values use the defaults; invalid ones return a
+  per-field `400` (`Paging.Page.Invalid`, `Paging.PageSize.Invalid`).
+* A page past the end is empty but still reports `totalCount`.
+* **Caveat:** each page reflects the data when it is requested, so a contact can appear twice or be skipped if data
+  changes between requests.
+
+### 14.2 Rate limiting (US2)
+
+| Policy | Where | Partition | Default | Settings |
+|---|---|---|---|---|
+| `api` | every `/api/v1/*` route | the `sub` claim, else the source address | 100 / 60 s | `RateLimiting:Api:PermitLimit`, `:WindowSeconds` |
+| `token` | `POST /connect/token` and the sign-in form | source address | 10 / 60 s | `RateLimiting:Token:PermitLimit`, `:WindowSeconds` |
+
+* Over the limit: `429` + `Retry-After` (whole seconds). The API answers ProblemDetails `RateLimit.Exceeded`; the
+  token endpoint answers `{"error":"temporarily_unavailable"}` (a documented extension, since RFC 6749 has no
+  token-endpoint throttling code); a person on the sign-in form sees the page again with "Too many attempts".
+* `429` wins over `401`/`403`. Health checks, Swagger, discovery and JWKS are never limited. There is no
+  per-account lockout, so an attacker cannot lock real users out.
+* Behind a reverse proxy, configure `ForwardedHeaders`, or every caller shares one address partition.
+
+### 14.3 Observability (US3)
+
+* **Traces:** incoming HTTP, outgoing HTTP (the API's discovery and JWKS calls continue into the Identity host's
+  trace), Npgsql, and custom `PhoneBook.Application` (one span per MediatR request, with the result code) and
+  `PhoneBook.Persistence` (`save`, `query.contacts_by_tag`, SQLite included) spans.
+* **Metrics:** `http.server.request.duration`, rate-limiter meters, and the `PhoneBook` meter
+  (`phonebook.contacts.created/updated/deleted`, `phonebook.ratelimit.rejections{policy}`).
+* **Export:** OTLP when `Telemetry:OtlpEndpoint` is set; otherwise off. Export never blocks requests.
+* **No personal data** in spans, metrics or logs: `url.query` (it carries the tag) and `client.address` are removed,
+  bodies and exceptions are not recorded, and a test scans everything recorded for names, phones and tags.
+* `docker compose --profile observability up --build`, then open **http://localhost:18888**.
+
+### 14.4 End-user sign-in (US4)
+
+* **Authorization code + PKCE (S256 only)** through the public client `phonebook-swagger-ui` (implicit consent).
+* A minimal English sign-in page with antiforgery protection; the session cookie is `HttpOnly`, `SameSite=Lax`,
+  Secure over HTTPS, and lasts 15 minutes. Authorization codes last 5 minutes and are single-use: replaying one
+  revokes the tokens issued from it. Access tokens last 1 hour.
+* Permissions: a person gets the requested scopes they hold (`bob` asking for write gets read only); if none
+  remain, the application gets `access_denied`. The API enforces the same `Contacts.Read` / `Contacts.Write` rules
+  as for applications.
+* The sign-in page's error never reveals whether an account exists, and an unknown account takes as long as a
+  wrong password. Return addresses must match a registered one exactly.
+
+### 14.5 Test additions
+
+Paging on both providers (including a walk over every page and the 100,000-contact performance check), rate limits
+with a fresh host per test, tracing on both providers, exact per-host metrics, a personal-data scan of spans,
+metrics and logs, exporter resilience, the full PKCE flow without a browser (replay, expiry, down-scoping, open
+redirects, cookie flags, timing), and end-to-end tokens for `alice` and `bob` against the real API.
+
+### 14.6 Still to do by a person
+
+The quickstart walk-through ([`quickstart.md`](specs/002-production-readiness/quickstart.md), scenarios 1–20)
+runs the compose stack, opens the Aspire dashboard and signs in through Swagger UI in a browser, including the
+manual SC-005 latency comparison. It needs a person at the keyboard, like feature 001's Swagger walkthrough.

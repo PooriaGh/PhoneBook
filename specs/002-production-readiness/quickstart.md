@@ -15,6 +15,9 @@ dotnet test --solution PhoneBook.slnx -c Release # Docker running (Testcontainer
 **Expected**: all feature-001 tests pass, apart from the tag-search tests, which are updated to the paged shape.
 The new suites for paging, rate limiting, telemetry and end-user sign-in pass on both providers where relevant.
 
+**Result (2026-09-25):** Release build with 0 warnings; **219 / 219** tests passing (Domain 45, API 115, Identity 50,
+Architecture 9), on SQLite and PostgreSQL.
+
 ## 2. Manual scenarios (both hosts running, as in the feature 001 quickstart §2)
 
 | # | Action | Expected (spec ref) |
@@ -45,6 +48,9 @@ The new suites for paging, rate limiting, telemetry and end-user sign-in pass on
   the clientCredentials flow, type `phonebook-swagger` and its DEV-ONLY secret (research R-05).
 - **Paging while data changes**: a contact may appear twice or be skipped across pages. This is expected
   (data-model §1).
+
+**Status:** not yet run. These scenarios need the compose stack and a person signing in through Swagger UI in a
+browser (task T080).
 
 ## 3. Troubleshooting
 

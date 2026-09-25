@@ -1,3 +1,7 @@
+# NOTE (feature 002): GET /api/v1/contacts?tag= is superseded by
+# specs/002-production-readiness/contracts/phonebook-api-changes.openapi.yaml. It now returns a paged object
+# { items, page, pageSize, totalCount, hasNext } instead of an array (BREAKING, FR-006). Every business route may
+# also answer 429 (RateLimit.Exceeded). Specs are the source of truth (constitution VII).
 openapi: 3.0.4
 info:
   title: PhoneBook API

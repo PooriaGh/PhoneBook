@@ -4,7 +4,9 @@
 #   docker compose --profile observability up --build -> additionally the Aspire dashboard (http://localhost:18888)
 #       showing traces and metrics from both hosts (feature 002). Without the profile, export fails quietly.
 #
-# Swagger UI: http://localhost:7001/swagger  (Authorize with client "phonebook-swagger").
+# Swagger UI: http://localhost:7001/swagger. Authorize either with the authorizationCode flow (client
+# "phonebook-swagger-ui" is pre-filled; sign in as alice/alice-dev-password, DEV-ONLY) or with clientCredentials
+# (type client "phonebook-swagger" and its DEV-ONLY secret; feature 002 changed the pre-filled client id).
 # The browser fetches tokens from localhost:7002, but the issuer is fixed to http://identity:8080/, which the
 # API container can reach for discovery and JWKS (research R-12, finding U5).
 

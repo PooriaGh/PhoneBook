@@ -42,9 +42,10 @@ paths:
                 status: 400
                 errorCode: General.Validation
                 traceId: 4bf92f3577b34da6a3ce929d0e0e4736
+                # Same shape as feature 001: each entry is "<code>: <message>" (checked against the implementation).
                 errors:
-                  page: [ { code: Paging.Page.Invalid, message: Page must be 1 or greater. } ]
-                  pageSize: [ { code: Paging.PageSize.Invalid, message: Page size must be between 1 and 200. } ]
+                  page: [ "Paging.Page.Invalid: Page must be 1 or greater." ]
+                  pageSize: [ "Paging.PageSize.Invalid: Page size must be between 1 and 200." ]
         "401": { description: Unauthorized }
         "403": { description: Forbidden }
         "429": { $ref: "#/components/responses/TooManyRequests" }
