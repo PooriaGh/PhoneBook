@@ -323,10 +323,15 @@ docker compose up --build                       # API http://localhost:7001/swag
 docker compose --profile postgres up --build    # adds an API on PostgreSQL at http://localhost:7003
 ```
 
-The compose file, both Dockerfiles (multi-stage, non-root `app` user) and the fixed-issuer setup are in the
-repository. **The container stack has not been smoke-tested yet** (tasks T119/T126): the image build was
-interrupted during this session. The same code paths ran successfully as local processes (see the quickstart
-checklist above).
+**Compose smoke test (T126): 14/14 checks passed** on both profiles:
+- the Identity container issues tokens over plain HTTP with the fixed issuer `http://identity:8080/`
+- both API containers (in-memory SQLite on `:7001`, PostgreSQL on `:7003`) validate those tokens via HTTP
+  discovery, create a contact (`201`) and find it by tag
+- a request without a token gets a `401` ProblemDetails
+- Swagger's `tokenUrl` is the browser-reachable `http://localhost:7002/connect/token`
+- the CORS preflight from `http://localhost:7001` is allowed
+
+Both images are multi-stage builds that run as the non-root `app` user.
 
 Data lives in memory (by design) and is gone after a restart.
 
@@ -377,7 +382,8 @@ The work followed the Spec Kit flow. Each step produced a reviewable artefact in
 | T127 | `Auth:RequireHttpsMetadata` was bound but had no effect (OpenIddict 7 has no such switch) | option removed |
 | T128 | an unused health-check package was declared | removed |
 | T130 | two deliberate deviations from the task wording were explained only in this README | recorded in `research.md` R-18 |
-| T126 / T129 | the compose stack and the in-browser Swagger "Authorize" flow were not yet verified | still open, see §11 |
+| T126 | the Docker Compose stack had never been run | built and smoke-tested on both profiles (14/14) |
+| T129 | the in-browser Swagger "Authorize" flow is not yet verified (it needs the dev client secret entered by hand) | open, reviewer step (§11) |
 
 ### AI-assisted engineering (Claude Code)
 

@@ -727,7 +727,7 @@ These tests cover the value objects, `Contact.Create` and the duplicate checker.
   - multi-stage builds: the `mcr.microsoft.com/dotnet/sdk:10.0` build stage copies `Directory.*.props`, `global.json` and the csproj files first for layer caching; the runtime stage uses `mcr.microsoft.com/dotnet/aspnet:10.0`
   - run as the non-root `app` user
   - `EXPOSE 8080`
-- [ ] T119 Create `docker-compose.yml` at the repository root:
+- [X] T119 Create `docker-compose.yml` at the repository root:
   - `identity` (port 7002→8080, `ASPNETCORE_ENVIRONMENT=Development`, `Identity__Issuer=http://identity:8080/`, `Identity__AllowedCorsOrigins__0=http://localhost:7001`)
   - `api` (port 7001→8080, `Auth__Authority=http://identity:8080/`, `Auth__PublicAuthority=http://localhost:7002`, `Auth__RequireHttpsMetadata=false`, `depends_on: identity`). The browser fetches tokens from `localhost:7002`, but their issuer is fixed to `http://identity:8080/`, which the API container can reach for discovery and JWKS *(U5)*.
   - under the profile `postgres`: a `postgres:17-alpine` service, plus an `api` override using `Database__Provider=Postgres` and `Database__ConnectionString=Host=postgres;Database=phonebook;Username=postgres;Password=postgres`. Put a `# DEV-ONLY credentials. Never use them outside local development.` comment above this service and above the dev client secrets (constitution Principle VI) *(S1)*
@@ -894,7 +894,7 @@ After Phase 2:
 ## Phase 9: Convergence
 
 - [X] T125 Fix the CI test step in `.github/workflows/ci.yml`: Microsoft.Testing.Platform exits with code 5 on `--report-trx --coverage` because the extensions are not referenced. Add `Microsoft.Testing.Extensions.TrxReport` and `Microsoft.Testing.Extensions.CodeCoverage` to `Directory.Packages.props` and the four test projects, or drop the flags, then confirm a green GitHub Actions run, per T120 / Constitution V (contradicts)
-- [ ] T126 Build and smoke-test the Docker Compose stack in `docker-compose.yml`. Default profile: get a token from `http://localhost:7002/connect/token`, then create and search through `http://localhost:7001` using the fixed issuer `http://identity:8080/`. Postgres profile: do the same through `http://localhost:7003`. Fix any issues with the HTTP issuer or discovery, per T119 / plan: research R-12, U5 (partial)
+- [X] T126 Build and smoke-test the Docker Compose stack in `docker-compose.yml`. Default profile: get a token from `http://localhost:7002/connect/token`, then create and search through `http://localhost:7001` using the fixed issuer `http://identity:8080/`. Postgres profile: do the same through `http://localhost:7003`. Fix any issues with the HTTP issuer or discovery, per T119 / plan: research R-12, U5 (partial)
 - [X] T127 Either apply `AuthOptions.RequireHttpsMetadata` to the OpenIddict validation configuration in `src/PhoneBook.Api/Infrastructure/Auth/AuthenticationSetup.cs`, or remove the option from `AuthOptions.cs` and `appsettings.json` if OpenIddict has no equivalent switch, per T055 / T119 (partial)
 - [X] T128 Remove the unused `AspNetCore.HealthChecks.NpgSql` entry from `Directory.Packages.props`, or reference it for a PostgreSQL readiness check in `src/PhoneBook.Infrastructure/DependencyInjection.cs`, per plan: health checks (unrequested)
 - [ ] T129 With both hosts running, do the in-browser Swagger UI walkthrough at `https://localhost:7001/swagger`: Authorize as `phonebook-swagger`, then call POST and GET. Tick the remaining item in the README quickstart checklist, per T124 / FR-015 / SC-001 (partial)
