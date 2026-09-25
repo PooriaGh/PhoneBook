@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>PhoneBook.Application</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PhoneBook.Domain\PhoneBook.Domain.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="MediatR" />
+    <PackageReference Include="FluentValidation" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <!-- IQueryable async operators (FirstOrDefaultAsync) for the ReadDbContext query side. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <!-- Dapper for hand-written read-side SQL (CQRS). Provider drivers stay in Infrastructure. -->
+    <PackageReference Include="Dapper" />
+  </ItemGroup>
+</Project>

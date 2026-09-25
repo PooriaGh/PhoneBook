@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore PhoneBook.slnx
+
+      - name: Build (warnings are errors)
+        run: dotnet build PhoneBook.slnx -c Release --no-restore
+
+      # Testcontainers uses the Docker daemon available on ubuntu-latest runners.
+      - name: Test (unit, integration on PostgreSQL + in-memory SQLite, architecture)
+        run: dotnet test --solution PhoneBook.slnx -c Release --no-build --report-trx --coverage
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: "**/TestResults/**"

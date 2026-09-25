@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PhoneBook.SharedKernel/PhoneBook.SharedKernel.csproj" />
+    <Project Path="src/PhoneBook.Domain/PhoneBook.Domain.csproj" />
+    <Project Path="src/PhoneBook.Application/PhoneBook.Application.csproj" />
+    <Project Path="src/PhoneBook.Infrastructure/PhoneBook.Infrastructure.csproj" />
+    <Project Path="src/PhoneBook.Api/PhoneBook.Api.csproj" />
+    <Project Path="src/PhoneBook.Identity/PhoneBook.Identity.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PhoneBook.Domain.UnitTests/PhoneBook.Domain.UnitTests.csproj" />
+    <Project Path="tests/PhoneBook.Api.IntegrationTests/PhoneBook.Api.IntegrationTests.csproj" />
+    <Project Path="tests/PhoneBook.Identity.IntegrationTests/PhoneBook.Identity.IntegrationTests.csproj" />
+    <Project Path="tests/PhoneBook.ArchitectureTests/PhoneBook.ArchitectureTests.csproj" />
+  </Folder>
+</Solution>

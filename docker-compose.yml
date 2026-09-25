@@ -1,0 +1,68 @@
+# PhoneBook: API + separate OpenIddict identity server.
+#   docker compose up --build                      -> API on in-memory SQLite (default)
+#   docker compose --profile postgres up --build   -> additionally an API instance on PostgreSQL (port 7003)
+#
+# Swagger UI: http://localhost:7001/swagger  (Authorize with client "phonebook-swagger").
+# The browser fetches tokens from localhost:7002, but the issuer is fixed to http://identity:8080/, which the
+# API container can reach for discovery and JWKS (research R-12, finding U5).
+
+services:
+  identity:
+    build:
+      context: .
+      dockerfile: src/PhoneBook.Identity/Dockerfile
+    ports:
+      - "7002:8080"
+    environment:
+      # Development enables the DEV-ONLY clients from appsettings.Development.json and plain-HTTP tokens.
+      ASPNETCORE_ENVIRONMENT: Development
+      Identity__Issuer: http://identity:8080/
+      Identity__AllowedCorsOrigins__0: http://localhost:7001
+      Identity__AllowedCorsOrigins__1: http://localhost:7003
+
+  api:
+    build:
+      context: .
+      dockerfile: src/PhoneBook.Api/Dockerfile
+    ports:
+      - "7001:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      Auth__Authority: http://identity:8080/
+      Auth__PublicAuthority: http://localhost:7002
+    depends_on:
+      - identity
+
+  # DEV-ONLY credentials. Never use them outside local development.
+  postgres:
+    image: postgres:17-alpine
+    profiles: [postgres]
+    environment:
+      POSTGRES_DB: phonebook
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d phonebook"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+
+  api-postgres:
+    build:
+      context: .
+      dockerfile: src/PhoneBook.Api/Dockerfile
+    profiles: [postgres]
+    ports:
+      - "7003:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      Auth__Authority: http://identity:8080/
+      Auth__PublicAuthority: http://localhost:7002
+      Database__Provider: Postgres
+      # DEV-ONLY credentials.
+      Database__ConnectionString: Host=postgres;Database=phonebook;Username=postgres;Password=postgres
+    depends_on:
+      identity:
+        condition: service_started
+      postgres:
+        condition: service_healthy
