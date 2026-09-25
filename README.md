@@ -8,6 +8,16 @@
 > This README explains the architecture, the technology choices, how to run and test the solution, and the
 > development process (spec-driven development with AI assistance).
 
+**Status: complete.** All 130 tasks are done and `/speckit-converge` reports the code converged with the spec,
+plan, tasks and constitution. Verification:
+
+| Check | Result |
+|---|---|
+| Automated tests (Release, 0 build warnings) | **132 / 132** passing, locally and on GitHub Actions |
+| Quickstart scenarios against both hosts over HTTPS | **17 / 17** |
+| Docker Compose smoke test (in-memory SQLite and PostgreSQL profiles) | **14 / 14** |
+| Swagger UI "Authorize" walkthrough in a browser | done |
+
 ---
 
 ## 1. Cover note
@@ -361,6 +371,8 @@ The work followed the Spec Kit flow. Each step produced a reviewable artefact in
    suite and a 0-warning Release build.
 7. **`/speckit-converge`** compared the finished code with the spec, plan, tasks and constitution. It
    appended the remaining work as a *Convergence* phase (T125–T130), which was then implemented (see below).
+   The final converge run found **no remaining gaps**: all 19 functional requirements, 6 success criteria and
+   16 acceptance scenarios are met, and there are no constitution violations.
 
 ### What the analysis caught before any code was written
 
@@ -378,7 +390,7 @@ The work followed the Spec Kit flow. Each step produced a reviewable artefact in
 
 | Finding | What was wrong | Fix |
 |---|---|---|
-| CI (T125) | the first GitHub Actions run failed: `--report-trx --coverage` needs Microsoft.Testing.Platform extensions, so zero tests ran | added `Microsoft.Testing.Extensions.TrxReport` and `CodeCoverage`; the same command passes locally (132/132) |
+| CI (T125) | the first GitHub Actions run failed: `--report-trx --coverage` needs Microsoft.Testing.Platform extensions, so zero tests ran | added `Microsoft.Testing.Extensions.TrxReport` and `CodeCoverage`; CI is green (132/132) |
 | T127 | `Auth:RequireHttpsMetadata` was bound but had no effect (OpenIddict 7 has no such switch) | option removed |
 | T128 | an unused health-check package was declared | removed |
 | T130 | two deliberate deviations from the task wording were explained only in this README | recorded in `research.md` R-18 |
