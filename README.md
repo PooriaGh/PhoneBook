@@ -314,7 +314,7 @@ locally over HTTPS, with real tokens from the Identity host: **17/17 passed**.
 - [x] 15–16: no token → 401 ProblemDetails + `WWW-Authenticate`; read-only client → 403
 - [x] 17: ordinal ordering (`احمدی` before `رضایی`)
 - [x] CORS preflight from the API origin allowed, other origins refused; Swagger `tokenUrl` = Identity `/connect/token`
-- [ ] Swagger UI **Authorize** click-through in a browser (reviewer step: enter the dev client secret)
+- [x] Swagger UI **Authorize** click-through in a browser (dev client secret entered by hand)
 
 **Docker Compose:**
 
@@ -383,7 +383,7 @@ The work followed the Spec Kit flow. Each step produced a reviewable artefact in
 | T128 | an unused health-check package was declared | removed |
 | T130 | two deliberate deviations from the task wording were explained only in this README | recorded in `research.md` R-18 |
 | T126 | the Docker Compose stack had never been run | built and smoke-tested on both profiles (14/14) |
-| T129 | the in-browser Swagger "Authorize" flow is not yet verified (it needs the dev client secret entered by hand) | open, reviewer step (§11) |
+| T129 | the in-browser Swagger "Authorize" flow had not been verified (it needs the dev client secret entered by hand) | walked through in the browser |
 
 ### AI-assisted engineering (Claude Code)
 
